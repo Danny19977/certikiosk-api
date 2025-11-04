@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Danny19977/sr-api/models"
-	"github.com/Danny19977/sr-api/utils"
+	"github.com/Danny19977/certikiosk.git/models"
+	"github.com/Danny19977/certikiosk.git/utils"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

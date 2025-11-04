@@ -1,19 +1,19 @@
 package routes
 
 import (
-	notificationController "github.com/Danny19977/sr-api/controller/Notification"
-	"github.com/Danny19977/sr-api/controller/auth"
-	"github.com/Danny19977/sr-api/controller/country"
-	"github.com/Danny19977/sr-api/controller/dashboard"
-	monthController "github.com/Danny19977/sr-api/controller/month"
-	"github.com/Danny19977/sr-api/controller/product"
-	"github.com/Danny19977/sr-api/controller/province"
-	Sale "github.com/Danny19977/sr-api/controller/sale"
-	"github.com/Danny19977/sr-api/controller/user"
-	"github.com/Danny19977/sr-api/controller/userlog"
-	weekController "github.com/Danny19977/sr-api/controller/week"
-	yearController "github.com/Danny19977/sr-api/controller/year"
-	"github.com/Danny19977/sr-api/middlewares"
+	notificationController "github.com/Danny19977/certikiosk.git/controller/Notification"
+	"github.com/Danny19977/certikiosk.git/controller/auth"
+	"github.com/Danny19977/certikiosk.git/controller/country"
+	"github.com/Danny19977/certikiosk.git/controller/dashboard"
+	monthController "github.com/Danny19977/certikiosk.git/controller/month"
+	"github.com/Danny19977/certikiosk.git/controller/product"
+	"github.com/Danny19977/certikiosk.git/controller/province"
+	Sale "github.com/Danny19977/certikiosk.git/controller/sale"
+	"github.com/Danny19977/certikiosk.git/controller/user"
+	"github.com/Danny19977/certikiosk.git/controller/userlog"
+	weekController "github.com/Danny19977/certikiosk.git/controller/week"
+	yearController "github.com/Danny19977/certikiosk.git/controller/year"
+	"github.com/Danny19977/certikiosk.git/middlewares"
 	"github.com/gofiber/fiber/v2"
 )
 

@@ -4,9 +4,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/Danny19977/sr-api/database"
-	"github.com/Danny19977/sr-api/models"
-	"github.com/Danny19977/sr-api/utils"
+	"github.com/Danny19977/certikiosk.git/database"
+	"github.com/Danny19977/certikiosk.git/models"
+	"github.com/Danny19977/certikiosk.git/utils"
 	"github.com/gofiber/fiber/v2"
 )
 

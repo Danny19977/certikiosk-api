@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Danny19977/sr-api/database"
-	"github.com/Danny19977/sr-api/models"
+	"github.com/Danny19977/certikiosk.git/database"
+	"github.com/Danny19977/certikiosk.git/models"
 )
 
 // TargetData represents aggregated target information

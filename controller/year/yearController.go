@@ -4,8 +4,8 @@ package year
 import (
 	"strconv"
 
-	"github.com/Danny19977/sr-api/database"
-	"github.com/Danny19977/sr-api/models"
+	"github.com/Danny19977/certikiosk.git/database"
+	"github.com/Danny19977/certikiosk.git/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
