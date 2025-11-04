@@ -12,6 +12,7 @@ type Citizens struct {
 	FirstName  string    `gorm:"not null"`
 	LastName   string    `gorm:"not null"`
 	Phone      string    `gorm:"not null"`
+	Fingerprint string   `gorm:"type:text"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

@@ -30,6 +30,11 @@ func Connect() {
 	DB = connection
 	fmt.Println("Database Connected 🎉!")
 
+	// Enable UUID extension for PostgreSQL
+	if err := connection.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"").Error; err != nil {
+		panic("Failed to create uuid-ossp extension: " + err.Error())
+	}
+
 	// Migrate in proper order - parent tables first, then child tables
 	connection.AutoMigrate(
 		&models.User{},
