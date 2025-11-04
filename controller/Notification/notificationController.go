@@ -34,9 +34,6 @@ func GetPaginatedNotification(c *fiber.Ctx) error {
 	database.DB.Where("uuid = ?", userUUID).First(&requestingUser)
 
 	query := db.Model(&models.Notification{})
-	if requestingUser.Role == "ASM" {
-		query = query.Where("province_uuid = ?", requestingUser.ProvinceUUID)
-	}
 	query = query.Where("name ILIKE ?", "%"+search+"%")
 	query.Count(&totalRecords)
 

@@ -36,17 +36,15 @@ func Register(c *fiber.Ctx) error {
 	}
 
 	u := &models.User{
-		Fullname:     nu.Fullname,
-		Email:        nu.Email,
-		Title:        nu.Title,
-		Phone:        nu.Phone,
-		Role:         nu.Role,
-		Permission:   nu.Permission,
-		Image:        nu.Image,
-		Status:       nu.Status,
-		Signature:    nu.Signature,
-		CountryUUID:  nu.CountryUUID,
-		ProvinceUUID: nu.ProvinceUUID,
+		Fullname:   nu.Fullname,
+		Email:      nu.Email,
+		Title:      nu.Title,
+		Phone:      nu.Phone,
+		Role:       nu.Role,
+		Permission: nu.Permission,
+		Image:      nu.Image,
+		Status:     nu.Status,
+		Signature:  nu.Signature,
 	}
 
 	u.SetPassword(nu.Password)
@@ -166,45 +164,21 @@ func AuthUser(c *fiber.Ctx) error {
 	u := models.User{}
 	database.DB.
 		Where("users.uuid = ?", userUUID).
-		Preload("Country").
-		Preload("Province").
 		First(&u)
 
-	// Create a debug response that shows more information about the user
+	// Create a response with user information
 	response := fiber.Map{
-		"uuid":          u.UUID,
-		"fullname":      u.Fullname,
-		"email":         u.Email,
-		"phone":         u.Phone,
-		"title":         u.Title,
-		"role":          u.Role,
-		"permission":    u.Permission,
-		"status":        u.Status,
-		"country_uuid":  u.CountryUUID,
-		"province_uuid": u.ProvinceUUID,
-		"signature":     u.Signature,
-		"created_at":    u.CreatedAt,
-		"updated_at":    u.UpdatedAt,
-	}
-
-	// Add country information if available
-	if u.Country != nil {
-		response["country"] = fiber.Map{
-			"uuid": u.Country.UUID,
-			"name": u.Country.Name,
-		}
-	} else {
-		response["country"] = nil
-	}
-
-	// Add province information if available
-	if u.Province != nil {
-		response["province"] = fiber.Map{
-			"uuid": u.Province.UUID,
-			"name": u.Province.Name,
-		}
-	} else {
-		response["province"] = nil
+		"uuid":       u.UUID,
+		"fullname":   u.Fullname,
+		"email":      u.Email,
+		"phone":      u.Phone,
+		"title":      u.Title,
+		"role":       u.Role,
+		"permission": u.Permission,
+		"status":     u.Status,
+		"signature":  u.Signature,
+		"created_at": u.CreatedAt,
+		"updated_at": u.UpdatedAt,
 	}
 
 	return c.JSON(response)

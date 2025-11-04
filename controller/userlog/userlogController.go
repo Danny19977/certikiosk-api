@@ -92,13 +92,6 @@ func GetUserLogByID(c *fiber.Ctx) error {
 	var dataList []models.UserLogs
 	var totalRecords int64
 
-	// Count total records matching the search query
-	db.Model(&models.Country{}).
-		Joins("JOIN users ON user_logs.user_uuid=users.uuid").
-		Where("user_logs.user_uuid = ?", UserUUID).
-		Where("users.fullname ILIKE ? OR user_logs.name ILIKE ? OR users.title ILIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%").
-		Count(&totalRecords)
-
 	err = db.
 		Joins("JOIN users ON user_logs.user_uuid=users.uuid").
 		Where("user_logs.user_uuid = ?", UserUUID).

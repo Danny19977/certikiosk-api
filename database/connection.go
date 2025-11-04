@@ -32,16 +32,9 @@ func Connect() {
 
 	// Migrate in proper order - parent tables first, then child tables
 	connection.AutoMigrate(
-		&models.Country{},
-		&models.Province{},
-		&models.Product{},
-		&models.Sale{},
 		&models.User{},
 		&models.UserLogs{},
 		&models.Notification{},
 		&models.PasswordReset{},
-		&models.Year{},
-		&models.Month{},
-		&models.Week{},
 	)
 }

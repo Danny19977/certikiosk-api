@@ -33,31 +33,17 @@ func GetPaginatedUsers(c *fiber.Ctx) error {
 	// Get user UUID from JWT
 	userUUID, _ := utils.GetUserUUIDFromToken(c)
 	var requestingUser models.User
-	db.Preload("Country").Preload("Province").Where("uuid = ?", userUUID).First(&requestingUser)
+	db.Where("uuid = ?", userUUID).First(&requestingUser)
 
 	query := db.Model(&models.User{})
-	if requestingUser.Role == "ASM" {
-		query = query.Where("province_uuid = ?", requestingUser.ProvinceUUID)
-	}
 	query = query.Where("fullname ILIKE ? OR title ILIKE ?", "%"+search+"%", "%"+search+"%")
 	query.Count(&totalRecords)
 
 	// Use the same query for fetching users
-	query = query.Preload("Country").Preload("Province").
-		Offset(offset).
+	query = query.Offset(offset).
 		Limit(limit).
 		Order("users.updated_at DESC")
 	err = query.Find(&users).Error
-	// If ASM, filter users by province
-	if requestingUser.Role == "ASM" {
-		filtered := []models.User{}
-		for _, u := range users {
-			if u.ProvinceUUID != nil && requestingUser.ProvinceUUID != nil && *u.ProvinceUUID == *requestingUser.ProvinceUUID {
-				filtered = append(filtered, u)
-			}
-		}
-		users = filtered
-	}
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -108,7 +94,6 @@ func GetPaginatedNoSerach(c *fiber.Ctx) error {
 		Count(&totalRecords)
 
 	err = db.
-		Preload("Country").Preload("Province").
 		Offset(offset).
 		Limit(limit).
 		Order("users.updated_at DESC").
@@ -146,7 +131,7 @@ func GetPaginatedNoSerach(c *fiber.Ctx) error {
 func GetAllUsers(c *fiber.Ctx) error {
 	db := database.DB
 	var users []models.User
-	db.Preload("Country").Preload("Province").Find(&users)
+	db.Find(&users)
 	return c.JSON(fiber.Map{
 		"status":  "success",
 		"message": "All users",
@@ -159,7 +144,7 @@ func GetUser(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	db := database.DB
 	var user models.User
-	db.Preload("Country").Preload("Province").Where("uuid = ?", uuid).First(&user)
+	db.Where("uuid = ?", uuid).First(&user)
 	if user.Fullname == "" {
 		return c.Status(404).JSON(
 			fiber.Map{
@@ -191,13 +176,7 @@ func CreateUser(c *fiber.Ctx) error {
 		Permission      string `json:"permission"`
 		Image           string `json:"profile_image"`
 		Status          bool   `json:"status"`
-		CountryUUID     string `json:"country_uuid"`
-		ProvinceUUID    string `json:"province_uuid"`
-		AreaUUID        string `json:"area_uuid"`
-
-		HeadUUID string `json:"head_uuid"`
-
-		Signature string `json:"signature"`
+		Signature       string `json:"signature"`
 	}
 
 	var p UserInput
@@ -224,15 +203,13 @@ func CreateUser(c *fiber.Ctx) error {
 	}
 
 	user := &models.User{
-		Fullname:     p.FullName,
-		Email:        p.Email,
-		Phone:        p.Phone,
-		Role:         p.Role,
-		Permission:   p.Permission,
-		Status:       p.Status,
-		CountryUUID:  stringToPointer(p.CountryUUID),
-		ProvinceUUID: stringToPointer(p.ProvinceUUID),
-		Signature:    p.Signature,
+		Fullname:   p.FullName,
+		Email:      p.Email,
+		Phone:      p.Phone,
+		Role:       p.Role,
+		Permission: p.Permission,
+		Status:     p.Status,
+		Signature:  p.Signature,
 	}
 
 	user.SetPassword(p.Password)
@@ -286,10 +263,6 @@ func UpdateUser(c *fiber.Ctx) error {
 		Permission      string `json:"permission"`
 		Image           string `json:"profile_image"`
 		Status          bool   `json:"status"`
-		CountryUUID     string `json:"country_uuid"`
-		ProvinceUUID    string `json:"province_uuid"`
-		AreaUUID        string `json:"area_uuid"`
-		HeadUUID        string `json:"head_uuid"`
 		Signature       string `json:"signature"`
 	}
 
@@ -315,8 +288,6 @@ func UpdateUser(c *fiber.Ctx) error {
 	user.Role = updateData.Role
 	user.Permission = updateData.Permission
 	user.Status = updateData.Status
-	user.CountryUUID = stringToPointer(updateData.CountryUUID)
-	user.ProvinceUUID = stringToPointer(updateData.ProvinceUUID)
 	user.Signature = updateData.Signature
 
 	db.Save(&user)
