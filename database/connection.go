@@ -36,5 +36,9 @@ func Connect() {
 		&models.UserLogs{},
 		&models.Notification{},
 		&models.PasswordReset{},
+		&models.Citizens{},
+		&models.Fingerprint{},
+		&models.Documents{},
+		&models.Certification{},
 	)
 }

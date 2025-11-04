@@ -12,7 +12,6 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	UUID            string `gorm:"primaryKey;not null;unique" json:"uuid"`
-	Sync            bool   `json:"sync" gorm:"default:false"`
 	Fullname        string `json:"fullname"`
 	Email           string `json:"email"`
 	Phone           string `json:"phone"`
@@ -21,7 +20,6 @@ type User struct {
 	ConformPassword string `json:"confirm_password"`
 	Role            string `json:"role"`
 	Permission      string `json:"permission"`
-	Image           string `json:"profile_image"`
 	Status          bool   `json:"status"`
 
 	Signature string `json:"signature"`

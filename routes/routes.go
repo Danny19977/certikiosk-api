@@ -3,6 +3,10 @@ package routes
 import (
 	notificationController "github.com/Danny19977/certikiosk.git/controller/Notification"
 	"github.com/Danny19977/certikiosk.git/controller/auth"
+	certificationController "github.com/Danny19977/certikiosk.git/controller/certification"
+	citizensController "github.com/Danny19977/certikiosk.git/controller/citizens"
+	documentsController "github.com/Danny19977/certikiosk.git/controller/documents"
+	fingerprintController "github.com/Danny19977/certikiosk.git/controller/fingerprint"
 	"github.com/Danny19977/certikiosk.git/controller/user"
 	"github.com/Danny19977/certikiosk.git/controller/userlog"
 	"github.com/Danny19977/certikiosk.git/middlewares"
@@ -61,5 +65,53 @@ func Setup(app *fiber.App) {
 	notificationGroup.Post("/create", notificationController.CreateNotification)
 	notificationGroup.Put("/update/:uuid", notificationController.UpdateNotification)
 	notificationGroup.Delete("/delete/:uuid", notificationController.DeleteNotification)
+
+	// Citizens controller - Protected routes
+	citizens := api.Group("/citizens")
+	citizens.Use(middlewares.IsAuthenticated)
+	citizens.Get("/all", citizensController.GetAllCitizens)
+	citizens.Get("/all/paginate", citizensController.GetPaginatedCitizens)
+	citizens.Get("/get/:uuid", citizensController.GetCitizen)
+	citizens.Get("/national-id/:national_id", citizensController.GetCitizenByNationalID)
+	citizens.Post("/create", citizensController.CreateCitizen)
+	citizens.Put("/update/:uuid", citizensController.UpdateCitizen)
+	citizens.Delete("/delete/:uuid", citizensController.DeleteCitizen)
+
+	// Fingerprint controller - Protected routes
+	fingerprint := api.Group("/fingerprint")
+	fingerprint.Use(middlewares.IsAuthenticated)
+	fingerprint.Get("/all/paginate", fingerprintController.GetPaginatedFingerprints)
+	fingerprint.Get("/citizen/:citizen_uuid", fingerprintController.GetFingerprintByCitizen)
+	fingerprint.Post("/enroll", fingerprintController.EnrollFingerprint)
+	fingerprint.Post("/verify", fingerprintController.VerifyFingerprint)
+	fingerprint.Put("/update/:citizen_uuid", fingerprintController.UpdateFingerprint)
+	fingerprint.Delete("/delete/:citizen_uuid", fingerprintController.DeleteFingerprint)
+
+	// Documents controller - Protected routes
+	documents := api.Group("/documents")
+	documents.Use(middlewares.IsAuthenticated)
+	documents.Get("/all", documentsController.GetAllDocuments)
+	documents.Get("/all/paginate", documentsController.GetPaginatedDocuments)
+	documents.Get("/active", documentsController.GetActiveDocuments)
+	documents.Get("/get/:uuid", documentsController.GetDocument)
+	documents.Post("/create", documentsController.CreateDocument)
+	documents.Post("/fetch-external", documentsController.FetchDocumentFromExternalSource)
+	documents.Put("/update/:uuid", documentsController.UpdateDocument)
+	documents.Put("/toggle-status/:uuid", documentsController.ToggleDocumentStatus)
+	documents.Delete("/delete/:uuid", documentsController.DeleteDocument)
+
+	// Certification controller - Protected routes
+	certification := api.Group("/certification")
+	certification.Use(middlewares.IsAuthenticated)
+	certification.Get("/all", certificationController.GetAllCertifications)
+	certification.Get("/all/paginate", certificationController.GetPaginatedCertifications)
+	certification.Get("/get/:uuid", certificationController.GetCertification)
+	certification.Get("/citizen/:citizen_uuid", certificationController.GetCertificationsByCitizen)
+	certification.Get("/document/:document_uuid", certificationController.GetCertificationsByDocument)
+	certification.Get("/download/:uuid", certificationController.DownloadCertifiedDocument)
+	certification.Get("/print/:uuid", certificationController.PrintCertifiedDocument)
+	certification.Post("/certify", certificationController.CertifyDocument)
+	certification.Put("/revoke/:uuid", certificationController.RevokeCertification)
+	certification.Delete("/delete/:uuid", certificationController.DeleteCertification)
 
 }

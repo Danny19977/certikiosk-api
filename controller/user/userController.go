@@ -174,7 +174,6 @@ func CreateUser(c *fiber.Ctx) error {
 		ConformPassword string `json:"confirm_password"`
 		Role            string `json:"role"`
 		Permission      string `json:"permission"`
-		Image           string `json:"profile_image"`
 		Status          bool   `json:"status"`
 		Signature       string `json:"signature"`
 	}
@@ -221,8 +220,6 @@ func CreateUser(c *fiber.Ctx) error {
 
 	user.UUID = utils.GenerateUUID()
 
-	user.Sync = true
-
 	database.DB.Create(user)
 
 	// Log user creation activity
@@ -261,7 +258,6 @@ func UpdateUser(c *fiber.Ctx) error {
 		ConformPassword string `json:"confirm_password"`
 		Role            string `json:"role"`
 		Permission      string `json:"permission"`
-		Image           string `json:"profile_image"`
 		Status          bool   `json:"status"`
 		Signature       string `json:"signature"`
 	}

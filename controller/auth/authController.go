@@ -42,7 +42,6 @@ func Register(c *fiber.Ctx) error {
 		Phone:      nu.Phone,
 		Role:       nu.Role,
 		Permission: nu.Permission,
-		Image:      nu.Image,
 		Status:     nu.Status,
 		Signature:  nu.Signature,
 	}
