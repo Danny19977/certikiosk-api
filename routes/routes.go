@@ -17,6 +17,15 @@ func Setup(app *fiber.App) {
 
 	api := app.Group("/api")
 
+	// ============================================
+	// PUBLIC ROUTES (No Authentication Required)
+	// ============================================
+	public := api.Group("/public")
+
+	// Public citizen registration
+	public.Post("/citizens/register", citizensController.CreateCitizen)
+	public.Post("/fingerprint/enroll", fingerprintController.EnrollFingerprint)
+
 	// Authentification controller - Public routes (no authentication required)
 	a := api.Group("/auth")
 	a.Post("/register", auth.Register)
@@ -66,23 +75,23 @@ func Setup(app *fiber.App) {
 	notificationGroup.Put("/update/:uuid", notificationController.UpdateNotification)
 	notificationGroup.Delete("/delete/:uuid", notificationController.DeleteNotification)
 
-	// Citizens controller - Protected routes
+	// Citizens controller - Protected routes (admin operations only)
+	// Note: Public citizen registration is available at /api/public/citizens/register
 	citizens := api.Group("/citizens")
 	citizens.Use(middlewares.IsAuthenticated)
 	citizens.Get("/all", citizensController.GetAllCitizens)
 	citizens.Get("/all/paginate", citizensController.GetPaginatedCitizens)
 	citizens.Get("/get/:uuid", citizensController.GetCitizen)
 	citizens.Get("/national-id/:national_id", citizensController.GetCitizenByNationalID)
-	citizens.Post("/create", citizensController.CreateCitizen)
 	citizens.Put("/update/:uuid", citizensController.UpdateCitizen)
 	citizens.Delete("/delete/:uuid", citizensController.DeleteCitizen)
 
 	// Fingerprint controller - Protected routes
+	// Note: Public fingerprint enrollment is available at /api/public/fingerprint/enroll
 	fingerprint := api.Group("/fingerprint")
 	fingerprint.Use(middlewares.IsAuthenticated)
 	fingerprint.Get("/all/paginate", fingerprintController.GetPaginatedFingerprints)
 	fingerprint.Get("/citizen/:citizen_uuid", fingerprintController.GetFingerprintByCitizen)
-	fingerprint.Post("/enroll", fingerprintController.EnrollFingerprint)
 	fingerprint.Post("/verify", fingerprintController.VerifyFingerprint)
 	fingerprint.Put("/update/:citizen_uuid", fingerprintController.UpdateFingerprint)
 	fingerprint.Delete("/delete/:citizen_uuid", fingerprintController.DeleteFingerprint)
@@ -94,6 +103,8 @@ func Setup(app *fiber.App) {
 	documents.Get("/all/paginate", documentsController.GetPaginatedDocuments)
 	documents.Get("/active", documentsController.GetActiveDocuments)
 	documents.Get("/get/:uuid", documentsController.GetDocument)
+	documents.Get("/national-id/:national_id", documentsController.GetDocumentsByNationalID)
+	documents.Get("/user/:user_uuid", documentsController.GetDocumentsByUserUUID)
 	documents.Post("/create", documentsController.CreateDocument)
 	documents.Post("/fetch-external", documentsController.FetchDocumentFromExternalSource)
 	documents.Put("/update/:uuid", documentsController.UpdateDocument)

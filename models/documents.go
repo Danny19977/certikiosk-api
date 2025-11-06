@@ -5,8 +5,10 @@ import "time"
 type Documents struct {
 	UUID string `gorm:"primaryKey;not null;unique" json:"uuid"`
 
+	NationalID      int       `json:"national_id"`
 	DocumentType    string    `json:"document_type"`
 	DocumentDataUrl string    `json:"document_data"`
+	UserUUID        string    `json:"user_uuid"`
 	IssueDate       time.Time `json:"issue_date"`
 	IsActive        bool      `json:"is_active"`
 

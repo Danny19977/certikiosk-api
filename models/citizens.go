@@ -7,12 +7,12 @@ import (
 )
 
 type Citizens struct {
-	UUID       uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
-	NationalID int       `gorm:"uniqueIndex;not null"`
-	FirstName  string    `gorm:"not null"`
-	LastName   string    `gorm:"not null"`
-	Phone      string    `gorm:"not null"`
-	Fingerprint string   `gorm:"type:text"`
+	UUID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	NationalID  int       `gorm:"uniqueIndex;not null"`
+	FirstName   string    `gorm:"not null"`
+	LastName    string    `gorm:"not null"`
+	Phone       string    `gorm:"not null"`
+	Fingerprint string    `gorm:"type:text" json:"fingerprint"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

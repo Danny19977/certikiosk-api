@@ -36,7 +36,7 @@ func EnrollFingerprint(c *fiber.Ctx) error {
 		})
 	}
 
-	// Verify citizen exists
+	// Verify citizen exists and update their fingerprint
 	var citizen models.Citizens
 	if err := database.DB.Where("uuid = ?", input.CitizensUUID).First(&citizen).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{
@@ -46,9 +46,8 @@ func EnrollFingerprint(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check if fingerprint already exists for this citizen
-	var existingFingerprint models.Fingerprint
-	if err := database.DB.Where("citizens_uuid = ?", input.CitizensUUID).First(&existingFingerprint).Error; err == nil {
+	// Check if fingerprint already enrolled
+	if citizen.Fingerprint != "" {
 		return c.Status(409).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Fingerprint already enrolled for this citizen",
@@ -56,15 +55,11 @@ func EnrollFingerprint(c *fiber.Ctx) error {
 		})
 	}
 
-	fingerprint := models.Fingerprint{
-		UUID:            utils.GenerateUUID(),
-		CitizensUUID:    input.CitizensUUID,
-		FingerprintData: input.FingerprintData,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
-	}
+	// Update citizen with fingerprint data
+	citizen.Fingerprint = input.FingerprintData
+	citizen.UpdatedAt = time.Now()
 
-	if err := database.DB.Create(&fingerprint).Error; err != nil {
+	if err := database.DB.Save(&citizen).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Failed to enroll fingerprint",
@@ -73,12 +68,12 @@ func EnrollFingerprint(c *fiber.Ctx) error {
 	}
 
 	// Log fingerprint enrollment
-	utils.LogCreateWithDB(database.DB, c, "fingerprint", "Fingerprint enrolled for "+citizen.FirstName+" "+citizen.LastName, fingerprint.UUID)
+	utils.LogCreateWithDB(database.DB, c, "fingerprint", "Fingerprint enrolled for "+citizen.FirstName+" "+citizen.LastName, citizen.UUID.String())
 
 	return c.JSON(fiber.Map{
 		"status":  "success",
 		"message": "Fingerprint enrolled successfully",
-		"data":    fingerprint,
+		"data":    citizen,
 	})
 }
 
@@ -106,9 +101,9 @@ func VerifyFingerprint(c *fiber.Ctx) error {
 		})
 	}
 
-	// Find fingerprint in database
-	var fingerprint models.Fingerprint
-	if err := database.DB.Where("fingerprint_data = ?", input.FingerprintData).First(&fingerprint).Error; err != nil {
+	// Find citizen by fingerprint
+	var citizen models.Citizens
+	if err := database.DB.Where("fingerprint = ?", input.FingerprintData).First(&citizen).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Fingerprint not recognized",
@@ -116,23 +111,10 @@ func VerifyFingerprint(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get associated citizen
-	var citizen models.Citizens
-	if err := database.DB.Where("uuid = ?", fingerprint.CitizensUUID).First(&citizen).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{
-			"status":  "error",
-			"message": "Associated citizen not found",
-			"data":    nil,
-		})
-	}
-
 	return c.JSON(fiber.Map{
 		"status":  "success",
 		"message": "Fingerprint verified successfully",
-		"data": fiber.Map{
-			"citizen":     citizen,
-			"fingerprint": fingerprint,
-		},
+		"data":    citizen,
 	})
 }
 
@@ -140,8 +122,16 @@ func VerifyFingerprint(c *fiber.Ctx) error {
 func GetFingerprintByCitizen(c *fiber.Ctx) error {
 	citizenUUID := c.Params("citizen_uuid")
 
-	var fingerprint models.Fingerprint
-	if err := database.DB.Where("citizens_uuid = ?", citizenUUID).First(&fingerprint).Error; err != nil {
+	var citizen models.Citizens
+	if err := database.DB.Where("uuid = ?", citizenUUID).First(&citizen).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Citizen not found",
+			"data":    nil,
+		})
+	}
+
+	if citizen.Fingerprint == "" {
 		return c.Status(404).JSON(fiber.Map{
 			"status":  "error",
 			"message": "No fingerprint found for this citizen",
@@ -152,7 +142,10 @@ func GetFingerprintByCitizen(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  "success",
 		"message": "Fingerprint retrieved successfully",
-		"data":    fingerprint,
+		"data": fiber.Map{
+			"citizen_uuid":     citizen.UUID,
+			"fingerprint_data": citizen.Fingerprint,
+		},
 	})
 }
 
@@ -170,12 +163,14 @@ func GetPaginatedFingerprints(c *fiber.Ctx) error {
 	}
 	offset := (page - 1) * limit
 
-	var fingerprints []models.Fingerprint
+	var citizens []models.Citizens
 	var totalRecords int64
 
-	db.Model(&models.Fingerprint{}).Count(&totalRecords)
+	// Only get citizens with fingerprints
+	query := db.Model(&models.Citizens{}).Where("fingerprint != ''")
+	query.Count(&totalRecords)
 
-	if err := db.Offset(offset).Limit(limit).Order("created_at DESC").Find(&fingerprints).Error; err != nil {
+	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&citizens).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Failed to fetch fingerprints",
@@ -195,7 +190,7 @@ func GetPaginatedFingerprints(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":     "success",
 		"message":    "Fingerprints retrieved successfully",
-		"data":       fingerprints,
+		"data":       citizens,
 		"pagination": pagination,
 	})
 }
@@ -226,19 +221,19 @@ func UpdateFingerprint(c *fiber.Ctx) error {
 		})
 	}
 
-	var fingerprint models.Fingerprint
-	if err := database.DB.Where("citizens_uuid = ?", citizenUUID).First(&fingerprint).Error; err != nil {
+	var citizen models.Citizens
+	if err := database.DB.Where("uuid = ?", citizenUUID).First(&citizen).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{
 			"status":  "error",
-			"message": "Fingerprint not found for this citizen",
+			"message": "Citizen not found",
 			"data":    nil,
 		})
 	}
 
-	fingerprint.FingerprintData = input.FingerprintData
-	fingerprint.UpdatedAt = time.Now()
+	citizen.Fingerprint = input.FingerprintData
+	citizen.UpdatedAt = time.Now()
 
-	if err := database.DB.Save(&fingerprint).Error; err != nil {
+	if err := database.DB.Save(&citizen).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Failed to update fingerprint",
@@ -249,7 +244,7 @@ func UpdateFingerprint(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  "success",
 		"message": "Fingerprint updated successfully",
-		"data":    fingerprint,
+		"data":    citizen,
 	})
 }
 
@@ -257,16 +252,28 @@ func UpdateFingerprint(c *fiber.Ctx) error {
 func DeleteFingerprint(c *fiber.Ctx) error {
 	citizenUUID := c.Params("citizen_uuid")
 
-	var fingerprint models.Fingerprint
-	if err := database.DB.Where("citizens_uuid = ?", citizenUUID).First(&fingerprint).Error; err != nil {
+	var citizen models.Citizens
+	if err := database.DB.Where("uuid = ?", citizenUUID).First(&citizen).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{
 			"status":  "error",
-			"message": "Fingerprint not found for this citizen",
+			"message": "Citizen not found",
 			"data":    nil,
 		})
 	}
 
-	if err := database.DB.Delete(&fingerprint).Error; err != nil {
+	if citizen.Fingerprint == "" {
+		return c.Status(404).JSON(fiber.Map{
+			"status":  "error",
+			"message": "No fingerprint found for this citizen",
+			"data":    nil,
+		})
+	}
+
+	// Clear the fingerprint field
+	citizen.Fingerprint = ""
+	citizen.UpdatedAt = time.Now()
+
+	if err := database.DB.Save(&citizen).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Failed to delete fingerprint",

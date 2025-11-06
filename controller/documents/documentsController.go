@@ -106,6 +106,48 @@ func GetDocument(c *fiber.Ctx) error {
 	})
 }
 
+// GetDocumentsByNationalID - Get all documents for a specific citizen by National ID
+func GetDocumentsByNationalID(c *fiber.Ctx) error {
+	nationalID := c.Params("national_id")
+	db := database.DB
+	var documents []models.Documents
+
+	if err := db.Where("national_id = ?", nationalID).Order("created_at DESC").Find(&documents).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to fetch documents",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "Documents retrieved successfully",
+		"data":    documents,
+	})
+}
+
+// GetDocumentsByUserUUID - Get all documents for a specific user by User UUID
+func GetDocumentsByUserUUID(c *fiber.Ctx) error {
+	userUUID := c.Params("user_uuid")
+	db := database.DB
+	var documents []models.Documents
+
+	if err := db.Where("user_uuid = ?", userUUID).Order("created_at DESC").Find(&documents).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to fetch documents",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "Documents retrieved successfully",
+		"data":    documents,
+	})
+}
+
 // GetActiveDocuments - Get all active documents
 func GetActiveDocuments(c *fiber.Ctx) error {
 	db := database.DB
@@ -129,6 +171,8 @@ func GetActiveDocuments(c *fiber.Ctx) error {
 // CreateDocument - Upload/Register a new document
 func CreateDocument(c *fiber.Ctx) error {
 	type DocumentInput struct {
+		NationalID      int    `json:"national_id"`
+		UserUUID        string `json:"user_uuid"`
 		DocumentType    string `json:"document_type"`
 		DocumentDataUrl string `json:"document_data_url"`
 		IssueDate       string `json:"issue_date"`
@@ -154,6 +198,14 @@ func CreateDocument(c *fiber.Ctx) error {
 		})
 	}
 
+	if input.NationalID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "National ID is required",
+			"data":    nil,
+		})
+	}
+
 	// Parse issue date
 	issueDate := time.Now()
 	if input.IssueDate != "" {
@@ -165,6 +217,8 @@ func CreateDocument(c *fiber.Ctx) error {
 
 	document := models.Documents{
 		UUID:            utils.GenerateUUID(),
+		NationalID:      input.NationalID,
+		UserUUID:        input.UserUUID,
 		DocumentType:    input.DocumentType,
 		DocumentDataUrl: input.DocumentDataUrl,
 		IssueDate:       issueDate,
@@ -194,6 +248,8 @@ func CreateDocument(c *fiber.Ctx) error {
 // FetchDocumentFromExternalSource - Retrieve document from Google Drive or AWS
 func FetchDocumentFromExternalSource(c *fiber.Ctx) error {
 	type FetchDocumentInput struct {
+		NationalID   int    `json:"national_id"`
+		UserUUID     string `json:"user_uuid"`
 		Source       string `json:"source"`        // "google_drive" or "aws_s3"
 		DocumentID   string `json:"document_id"`   // ID/Key in external source
 		DocumentType string `json:"document_type"` // Type of document
@@ -213,6 +269,14 @@ func FetchDocumentFromExternalSource(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Source and document ID are required",
+			"data":    nil,
+		})
+	}
+
+	if input.NationalID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "National ID is required",
 			"data":    nil,
 		})
 	}
@@ -239,6 +303,8 @@ func FetchDocumentFromExternalSource(c *fiber.Ctx) error {
 	// Create document record
 	document := models.Documents{
 		UUID:            utils.GenerateUUID(),
+		NationalID:      input.NationalID,
+		UserUUID:        input.UserUUID,
 		DocumentType:    input.DocumentType,
 		DocumentDataUrl: documentUrl,
 		IssueDate:       time.Now(),
@@ -268,6 +334,8 @@ func UpdateDocument(c *fiber.Ctx) error {
 	db := database.DB
 
 	type UpdateDocumentInput struct {
+		NationalID      int    `json:"national_id"`
+		UserUUID        string `json:"user_uuid"`
 		DocumentType    string `json:"document_type"`
 		DocumentDataUrl string `json:"document_data_url"`
 		IsActive        *bool  `json:"is_active"`
@@ -293,6 +361,12 @@ func UpdateDocument(c *fiber.Ctx) error {
 	}
 
 	// Update fields
+	if updateData.NationalID != 0 {
+		document.NationalID = updateData.NationalID
+	}
+	if updateData.UserUUID != "" {
+		document.UserUUID = updateData.UserUUID
+	}
 	if updateData.DocumentType != "" {
 		document.DocumentType = updateData.DocumentType
 	}

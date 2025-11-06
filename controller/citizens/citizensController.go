@@ -146,6 +146,7 @@ func CreateCitizen(c *fiber.Ctx) error {
 		LastName    string `json:"last_name"`
 		DateOfBirth string `json:"date_of_birth"`
 		Email       string `json:"email"`
+		Fingerprint string `json:"fingerprint"`
 	}
 
 	var input CitizenInput
@@ -168,8 +169,9 @@ func CreateCitizen(c *fiber.Ctx) error {
 	}
 
 	// Check if citizen with same National ID already exists
-	var existingCitizen models.Citizens
-	if err := database.DB.Where("national_id = ?", input.NationalID).First(&existingCitizen).Error; err == nil {
+	var count int64
+	database.DB.Model(&models.Citizens{}).Where("national_id = ?", input.NationalID).Count(&count)
+	if count > 0 {
 		return c.Status(409).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Citizen with this National ID already exists",
@@ -183,6 +185,7 @@ func CreateCitizen(c *fiber.Ctx) error {
 		FirstName:   input.FirstName,
 		LastName:    input.LastName,
 		Phone:       input.Email,
+		Fingerprint: input.Fingerprint,
 	}
 
 	if err := database.DB.Create(&citizen).Error; err != nil {
@@ -209,9 +212,9 @@ func UpdateCitizen(c *fiber.Ctx) error {
 	db := database.DB
 
 	type UpdateCitizenInput struct {
-		FirstName   string `json:"first_name"`
-		LastName    string `json:"last_name"`
-		Phone       string `json:"phone"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Phone     string `json:"phone"`
 	}
 
 	var updateData UpdateCitizenInput
