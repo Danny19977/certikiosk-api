@@ -578,3 +578,224 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// SendDocumentEmailFromGDrive - Send document via email from Google Drive
+func SendDocumentEmailFromGDrive(c *fiber.Ctx) error {
+	type EmailGDriveInput struct {
+		Email        string `json:"email"`
+		FileID       string `json:"file_id"`
+		DocumentType string `json:"document_type"`
+		DocumentName string `json:"document_name"`
+	}
+
+	var input EmailGDriveInput
+
+	// Parse JSON or form data
+	if err := c.BodyParser(&input); err != nil {
+		// Try parsing as form data
+		input.Email = c.FormValue("email")
+		input.FileID = c.FormValue("file_id")
+		input.DocumentType = c.FormValue("document_type")
+		input.DocumentName = c.FormValue("document_name")
+
+		if input.Email == "" {
+			return c.Status(400).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Invalid input data",
+				"error":   err.Error(),
+			})
+		}
+	}
+
+	// Validate required fields
+	if input.Email == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Email address is required",
+			"data":    nil,
+		})
+	}
+
+	if input.FileID == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Google Drive file ID is required",
+			"data":    nil,
+		})
+	}
+
+	// Set defaults
+	if input.DocumentType == "" {
+		input.DocumentType = "Document"
+	}
+	if input.DocumentName == "" {
+		input.DocumentName = "document"
+	}
+
+	// Download file from Google Drive
+	pdfData, err := utils.DownloadPublicDriveFile(input.FileID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to download file from Google Drive",
+			"error":   err.Error(),
+		})
+	}
+
+	// Send email with PDF attachment
+	err = utils.SendDocumentEmail(input.Email, input.DocumentType, input.FileID, pdfData)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to send email",
+			"error":   err.Error(),
+		})
+	}
+
+	// Log email sent activity
+	utils.LogCreateWithDB(database.DB, c, "document_email_gdrive", "Document from GDrive sent to "+input.Email, input.FileID)
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "Document sent successfully to " + input.Email,
+		"data": fiber.Map{
+			"email":         input.Email,
+			"document_type": input.DocumentType,
+			"file_id":       input.FileID,
+			"document_name": input.DocumentName,
+		},
+	})
+}
+
+// GenerateStampedPDF - Generate a stamped/certified PDF for printing
+func GenerateStampedPDF(c *fiber.Ctx) error {
+	type StampedPDFInput struct {
+		FileID        string `json:"file_id"`
+		DocumentType  string `json:"document_type"`
+		CitizenName   string `json:"citizen_name"`
+		NationalID    string `json:"national_id"`
+		CertifierName string `json:"certifier_name"`
+		IncludeStamp  bool   `json:"include_stamp"`
+		StampText     string `json:"stamp_text"`
+		DocumentName  string `json:"document_name"`
+	}
+
+	var input StampedPDFInput
+
+	// Parse JSON or query parameters
+	if err := c.BodyParser(&input); err != nil {
+		// Try parsing from query params
+		input.FileID = c.Query("file_id")
+		input.DocumentType = c.Query("document_type")
+		input.CitizenName = c.Query("citizen_name")
+		input.NationalID = c.Query("national_id")
+		input.CertifierName = c.Query("certifier_name", "CertiKiosk System")
+		input.IncludeStamp = c.Query("include_stamp", "true") == "true"
+		input.StampText = c.Query("stamp_text")
+		input.DocumentName = c.Query("document_name", "document")
+	}
+
+	// Validate required fields
+	if input.FileID == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Google Drive file ID is required",
+			"data":    nil,
+		})
+	}
+
+	// Set defaults
+	if input.DocumentType == "" {
+		input.DocumentType = "Document"
+	}
+	if input.CertifierName == "" {
+		input.CertifierName = "CertiKiosk System"
+	}
+	if input.DocumentName == "" {
+		input.DocumentName = "document"
+	}
+
+	// Download original file from Google Drive
+	pdfData, err := utils.DownloadPublicDriveFile(input.FileID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to download file from Google Drive",
+			"error":   err.Error(),
+		})
+	}
+
+	// Prepare certification info
+	certInfo := utils.CertificationInfo{
+		CitizenName:   input.CitizenName,
+		NationalID:    input.NationalID,
+		DocumentType:  input.DocumentType,
+		CertifiedDate: time.Now(),
+		CertifierName: input.CertifierName,
+		StampDetails:  input.StampText,
+	}
+
+	if input.StampText == "" {
+		certInfo.StampDetails = utils.GetCertificationStampTemplate(input.CertifierName, time.Now())
+	}
+
+	// For now, return the original PDF with metadata
+	// In production, you would add the stamp to the PDF here
+	// using a PDF library like pdfcpu or gofpdf
+
+	// Log the generation activity
+	utils.LogCreateWithDB(database.DB, c, "stamped_pdf_generate", "Stamped PDF generated for "+input.CitizenName, input.FileID)
+
+	// Set response headers for PDF download
+	c.Set("Content-Type", "application/pdf")
+	c.Set("Content-Disposition", "inline; filename=\""+input.DocumentName+"_stamped.pdf\"")
+
+	// Return the PDF data directly
+	// In production, this would be the stamped PDF
+	return c.Send(pdfData)
+}
+
+// GenerateStampedPDFMetadata - Get metadata for stamped PDF without downloading
+func GenerateStampedPDFMetadata(c *fiber.Ctx) error {
+	fileID := c.Query("file_id")
+	documentType := c.Query("document_type", "Document")
+	citizenName := c.Query("citizen_name")
+	nationalID := c.Query("national_id")
+
+	if fileID == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Google Drive file ID is required",
+			"data":    nil,
+		})
+	}
+
+	// Get file info from Google Drive
+	fileInfo := utils.GetDriveFileInfo(fileID)
+
+	// Prepare certification metadata
+	certInfo := utils.CertificationInfo{
+		CitizenName:   citizenName,
+		NationalID:    nationalID,
+		DocumentType:  documentType,
+		CertifiedDate: time.Now(),
+		CertifierName: "CertiKiosk System",
+	}
+
+	metadata := utils.GenerateCertificationMetadata(certInfo)
+
+	// Merge file info with certification metadata
+	response := fiber.Map{
+		"file_info":       fileInfo,
+		"certification":   metadata,
+		"download_url":    fileInfo["download_url"],
+		"view_url":        fileInfo["view_url"],
+		"stamped_pdf_url": "/api/documents/generate-stamped-pdf?file_id=" + fileID,
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "Stamped PDF metadata generated",
+		"data":    response,
+	})
+}

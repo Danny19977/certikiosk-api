@@ -35,6 +35,12 @@ func Setup(app *fiber.App) {
 	public.Get("/documents/:uuid", documentsController.GetDocument)
 	public.Post("/documents/send-email", documentsController.SendDocumentEmail)
 
+	// Public Google Drive document operations for kiosk
+	public.Post("/documents/send-email-gdrive", documentsController.SendDocumentEmailFromGDrive)
+	public.Get("/documents/generate-stamped-pdf", documentsController.GenerateStampedPDF)
+	public.Post("/documents/generate-stamped-pdf", documentsController.GenerateStampedPDF)
+	public.Get("/documents/stamped-pdf-metadata", documentsController.GenerateStampedPDFMetadata)
+
 	// Authentification controller - Public routes (no authentication required)
 	a := api.Group("/auth")
 	a.Post("/register", auth.Register)
@@ -117,6 +123,10 @@ func Setup(app *fiber.App) {
 	documents.Put("/toggle-status/:uuid", documentsController.ToggleDocumentStatus)
 	documents.Delete("/delete/:uuid", documentsController.DeleteDocument)
 	documents.Post("/send-email", documentsController.SendDocumentEmail)
+	documents.Post("/send-email-gdrive", documentsController.SendDocumentEmailFromGDrive)
+	documents.Get("/generate-stamped-pdf", documentsController.GenerateStampedPDF)
+	documents.Post("/generate-stamped-pdf", documentsController.GenerateStampedPDF)
+	documents.Get("/stamped-pdf-metadata", documentsController.GenerateStampedPDFMetadata)
 
 	// Certification controller - Protected routes
 	certification := api.Group("/certification")
