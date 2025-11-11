@@ -24,7 +24,16 @@ func Setup(app *fiber.App) {
 
 	// Public citizen registration
 	public.Post("/citizens/register", citizensController.CreateCitizen)
+
+	// Public fingerprint operations for kiosk
 	public.Post("/fingerprint/enroll", fingerprintController.EnrollFingerprint)
+	public.Post("/fingerprint/verify", fingerprintController.VerifyFingerprint)
+
+	// Public document access for kiosk (read-only operations)
+	public.Get("/documents/national-id/:national_id", documentsController.GetDocumentsByNationalID)
+	public.Get("/documents/active", documentsController.GetActiveDocuments)
+	public.Get("/documents/:uuid", documentsController.GetDocument)
+	public.Post("/documents/send-email", documentsController.SendDocumentEmail)
 
 	// Authentification controller - Public routes (no authentication required)
 	a := api.Group("/auth")
@@ -87,29 +96,27 @@ func Setup(app *fiber.App) {
 	citizens.Delete("/delete/:uuid", citizensController.DeleteCitizen)
 
 	// Fingerprint controller - Protected routes
-	// Note: Public fingerprint enrollment is available at /api/public/fingerprint/enroll
+	// Note: Public fingerprint enrollment and verification are available at /api/public/fingerprint/*
 	fingerprint := api.Group("/fingerprint")
 	fingerprint.Use(middlewares.IsAuthenticated)
 	fingerprint.Get("/all/paginate", fingerprintController.GetPaginatedFingerprints)
 	fingerprint.Get("/citizen/:citizen_uuid", fingerprintController.GetFingerprintByCitizen)
-	fingerprint.Post("/verify", fingerprintController.VerifyFingerprint)
 	fingerprint.Put("/update/:citizen_uuid", fingerprintController.UpdateFingerprint)
 	fingerprint.Delete("/delete/:citizen_uuid", fingerprintController.DeleteFingerprint)
 
-	// Documents controller - Protected routes
+	// Documents controller - Protected routes (admin operations)
+	// Note: Public read-only document access and email sending are available at /api/public/documents/*
 	documents := api.Group("/documents")
 	documents.Use(middlewares.IsAuthenticated)
 	documents.Get("/all", documentsController.GetAllDocuments)
 	documents.Get("/all/paginate", documentsController.GetPaginatedDocuments)
-	documents.Get("/active", documentsController.GetActiveDocuments)
-	documents.Get("/get/:uuid", documentsController.GetDocument)
-	documents.Get("/national-id/:national_id", documentsController.GetDocumentsByNationalID)
 	documents.Get("/user/:user_uuid", documentsController.GetDocumentsByUserUUID)
 	documents.Post("/create", documentsController.CreateDocument)
 	documents.Post("/fetch-external", documentsController.FetchDocumentFromExternalSource)
 	documents.Put("/update/:uuid", documentsController.UpdateDocument)
 	documents.Put("/toggle-status/:uuid", documentsController.ToggleDocumentStatus)
 	documents.Delete("/delete/:uuid", documentsController.DeleteDocument)
+	documents.Post("/send-email", documentsController.SendDocumentEmail)
 
 	// Certification controller - Protected routes
 	certification := api.Group("/certification")

@@ -459,3 +459,122 @@ func ToggleDocumentStatus(c *fiber.Ctx) error {
 		"data":    document,
 	})
 }
+
+// SendDocumentEmail - Send document via email
+func SendDocumentEmail(c *fiber.Ctx) error {
+	type EmailInput struct {
+		Email        string `json:"email"`
+		DocumentUUID string `json:"document_uuid"`
+		DocumentType string `json:"document_type"`
+	}
+
+	var input EmailInput
+
+	// Parse multipart form data
+	if err := c.BodyParser(&input); err != nil {
+		// Try parsing as multipart form
+		input.Email = c.FormValue("email")
+		input.DocumentUUID = c.FormValue("document_uuid")
+		input.DocumentType = c.FormValue("document_type")
+
+		if input.Email == "" {
+			return c.Status(400).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Invalid input data",
+				"error":   err.Error(),
+			})
+		}
+	}
+
+	// Validate email
+	if input.Email == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Email address is required",
+			"data":    nil,
+		})
+	}
+
+	// Get PDF file from form
+	file, err := c.FormFile("pdf")
+	var pdfData []byte
+
+	if err == nil && file != nil {
+		// Read uploaded PDF file
+		fileHandle, err := file.Open()
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Failed to read PDF file",
+				"error":   err.Error(),
+			})
+		}
+		defer fileHandle.Close()
+
+		pdfData = make([]byte, file.Size)
+		_, err = fileHandle.Read(pdfData)
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Failed to read PDF content",
+				"error":   err.Error(),
+			})
+		}
+	} else if input.DocumentUUID != "" {
+		// Fetch document from database if UUID provided
+		db := database.DB
+		var document models.Documents
+
+		if err := db.Where("uuid = ?", input.DocumentUUID).First(&document).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Document not found",
+				"data":    nil,
+			})
+		}
+
+		input.DocumentType = document.DocumentType
+
+		// TODO: Fetch actual PDF data from DocumentDataUrl
+		// For now, return an error indicating PDF needs to be uploaded
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Please upload the PDF file directly",
+			"data":    nil,
+		})
+	} else {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Either PDF file or document UUID is required",
+			"data":    nil,
+		})
+	}
+
+	// Set default document type if not provided
+	if input.DocumentType == "" {
+		input.DocumentType = "Document"
+	}
+
+	// Send email with PDF attachment
+	err = utils.SendDocumentEmail(input.Email, input.DocumentType, input.DocumentUUID, pdfData)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to send email",
+			"error":   err.Error(),
+		})
+	}
+
+	// Log email sent activity
+	utils.LogCreateWithDB(database.DB, c, "document_email", "Document sent to "+input.Email, input.DocumentUUID)
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "Document sent successfully to " + input.Email,
+		"data": fiber.Map{
+			"email":         input.Email,
+			"document_type": input.DocumentType,
+			"document_uuid": input.DocumentUUID,
+		},
+	})
+}
