@@ -41,6 +41,16 @@ func Setup(app *fiber.App) {
 	public.Post("/documents/generate-stamped-pdf", documentsController.GenerateStampedPDF)
 	public.Get("/documents/stamped-pdf-metadata", documentsController.GenerateStampedPDFMetadata)
 
+	// Google Drive proxy endpoints (bypass CORS)
+	public.Get("/documents/gdrive/download/:file_id", documentsController.DownloadGoogleDriveFile)
+	public.Get("/documents/gdrive/download", documentsController.DownloadGoogleDriveFile)
+	public.Get("/documents/gdrive/metadata/:file_id", documentsController.GetGoogleDriveFileMetadata)
+	public.Get("/documents/gdrive/metadata", documentsController.GetGoogleDriveFileMetadata)
+
+	// Alternative endpoint names for frontend compatibility
+	public.Get("/documents/download-google-drive", documentsController.DownloadGoogleDriveFile)
+	public.Get("/documents/google-drive-metadata", documentsController.GetGoogleDriveFileMetadata)
+
 	// Authentification controller - Public routes (no authentication required)
 	a := api.Group("/auth")
 	a.Post("/register", auth.Register)
@@ -127,6 +137,14 @@ func Setup(app *fiber.App) {
 	documents.Get("/generate-stamped-pdf", documentsController.GenerateStampedPDF)
 	documents.Post("/generate-stamped-pdf", documentsController.GenerateStampedPDF)
 	documents.Get("/stamped-pdf-metadata", documentsController.GenerateStampedPDFMetadata)
+
+	// Google Drive proxy endpoints (also available here for authenticated access)
+	documents.Get("/download-google-drive", documentsController.DownloadGoogleDriveFile)
+	documents.Get("/google-drive-metadata", documentsController.GetGoogleDriveFileMetadata)
+	documents.Get("/gdrive/download/:file_id", documentsController.DownloadGoogleDriveFile)
+	documents.Get("/gdrive/download", documentsController.DownloadGoogleDriveFile)
+	documents.Get("/gdrive/metadata/:file_id", documentsController.GetGoogleDriveFileMetadata)
+	documents.Get("/gdrive/metadata", documentsController.GetGoogleDriveFileMetadata)
 
 	// Certification controller - Protected routes
 	certification := api.Group("/certification")

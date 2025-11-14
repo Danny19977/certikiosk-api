@@ -1,7 +1,10 @@
 package documents
 
 import (
+	"fmt"
+	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Danny19977/certikiosk.git/database"
@@ -9,6 +12,15 @@ import (
 	"github.com/Danny19977/certikiosk.git/utils"
 	"github.com/gofiber/fiber/v2"
 )
+
+// Helper functions
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
+
+func splitString(s, sep string) []string {
+	return strings.Split(s, sep)
+}
 
 // GetPaginatedDocuments - Get paginated list of documents
 func GetPaginatedDocuments(c *fiber.Ctx) error {
@@ -463,28 +475,57 @@ func ToggleDocumentStatus(c *fiber.Ctx) error {
 // SendDocumentEmail - Send document via email
 func SendDocumentEmail(c *fiber.Ctx) error {
 	type EmailInput struct {
-		Email        string `json:"email"`
-		DocumentUUID string `json:"document_uuid"`
-		DocumentType string `json:"document_type"`
+		Email             string `json:"email"`
+		DocumentUUID      string `json:"document_uuid"`
+		DocumentType      string `json:"document_type"`
+		FileID            string `json:"file_id"`              // Google Drive file ID
+		GoogleDriveFileID string `json:"google_drive_file_id"` // Alternative parameter name
+		FileId            string `json:"fileId"`                // CamelCase variant
 	}
 
 	var input EmailInput
 
-	// Parse multipart form data
+	// Log the raw request body for debugging
+	fmt.Printf("📨 Email request received\n")
+	fmt.Printf("📨 Content-Type: %s\n", c.Get("Content-Type"))
+	fmt.Printf("📨 Request body: %s\n", string(c.Body()))
+
+	// Parse JSON or form data
 	if err := c.BodyParser(&input); err != nil {
 		// Try parsing as multipart form
 		input.Email = c.FormValue("email")
 		input.DocumentUUID = c.FormValue("document_uuid")
 		input.DocumentType = c.FormValue("document_type")
+		input.FileID = c.FormValue("file_id")
+		input.GoogleDriveFileID = c.FormValue("google_drive_file_id")
+		input.FileId = c.FormValue("fileId")
 
+		// Also try query parameters
 		if input.Email == "" {
-			return c.Status(400).JSON(fiber.Map{
-				"status":  "error",
-				"message": "Invalid input data",
-				"error":   err.Error(),
-			})
+			input.Email = c.Query("email")
+		}
+		if input.FileID == "" {
+			input.FileID = c.Query("file_id")
+		}
+		if input.FileId == "" {
+			input.FileId = c.Query("fileId")
+		}
+		if input.GoogleDriveFileID == "" {
+			input.GoogleDriveFileID = c.Query("google_drive_file_id")
+		}
+		if input.DocumentType == "" {
+			input.DocumentType = c.Query("document_type")
+		}
+		if input.DocumentUUID == "" {
+			input.DocumentUUID = c.Query("document_uuid")
 		}
 	}
+
+	fmt.Printf("📨 Parsed email: %s\n", input.Email)
+	fmt.Printf("📨 Parsed file_id: %s\n", input.FileID)
+	fmt.Printf("📨 Parsed fileId: %s\n", input.FileId)
+	fmt.Printf("📨 Parsed google_drive_file_id: %s\n", input.GoogleDriveFileID)
+	fmt.Printf("📨 Parsed document_uuid: %s\n", input.DocumentUUID)
 
 	// Validate email
 	if input.Email == "" {
@@ -495,11 +536,33 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get PDF file from form
+	// Get the Google Drive file ID from any of the parameter variants
+	googleDriveFileID := input.FileID
+	if googleDriveFileID == "" {
+		googleDriveFileID = input.GoogleDriveFileID
+	}
+	if googleDriveFileID == "" {
+		googleDriveFileID = input.FileId
+	}
+
+	fmt.Printf("📨 Final Google Drive file ID: %s\n", googleDriveFileID)
+
+	// Get PDF file from form - try both "pdf" and "pdfFile" field names
 	file, err := c.FormFile("pdf")
+	if err != nil {
+		// Try alternative field name "pdfFile"
+		file, err = c.FormFile("pdfFile")
+		if err == nil {
+			fmt.Printf("📨 Found PDF file in 'pdfFile' field\n")
+		}
+	} else {
+		fmt.Printf("📨 Found PDF file in 'pdf' field\n")
+	}
+
 	var pdfData []byte
 
 	if err == nil && file != nil {
+		fmt.Printf("📨 Processing uploaded PDF file: %s, size: %d bytes\n", file.Filename, file.Size)
 		// Read uploaded PDF file
 		fileHandle, err := file.Open()
 		if err != nil {
@@ -511,14 +574,38 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		}
 		defer fileHandle.Close()
 
-		pdfData = make([]byte, file.Size)
-		_, err = fileHandle.Read(pdfData)
+		pdfData, err = io.ReadAll(fileHandle)
 		if err != nil {
 			return c.Status(400).JSON(fiber.Map{
 				"status":  "error",
 				"message": "Failed to read PDF content",
 				"error":   err.Error(),
 			})
+		}
+		fmt.Printf("📨 Successfully read PDF file: %d bytes\n", len(pdfData))
+	} else if googleDriveFileID != "" {
+		// Download from Google Drive
+		fmt.Printf("📧 Downloading Google Drive file for email: %s\n", googleDriveFileID)
+		pdfData, err = utils.DownloadFileFromDrive(googleDriveFileID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Failed to download file from Google Drive",
+				"error":   err.Error(),
+			})
+		}
+
+		if len(pdfData) == 0 {
+			return c.Status(500).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Downloaded file is empty (0 bytes). The file may be private or the link is incorrect.",
+				"data":    nil,
+			})
+		}
+
+		// Set document type if not provided
+		if input.DocumentType == "" {
+			input.DocumentType = "Document"
 		}
 	} else if input.DocumentUUID != "" {
 		// Fetch document from database if UUID provided
@@ -535,17 +622,60 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 
 		input.DocumentType = document.DocumentType
 
-		// TODO: Fetch actual PDF data from DocumentDataUrl
-		// For now, return an error indicating PDF needs to be uploaded
+		// Try to download from Google Drive if DocumentDataUrl contains a Google Drive link
+		if document.DocumentDataUrl != "" {
+			// Extract file ID from Google Drive URL if present
+			// Example: https://drive.google.com/file/d/FILE_ID/view
+			// Or: https://drive.google.com/uc?export=download&id=FILE_ID
+			var extractedFileID string
+
+			// Try to extract file ID from URL
+			if len(document.DocumentDataUrl) > 0 && (contains(document.DocumentDataUrl, "drive.google.com") ||
+				contains(document.DocumentDataUrl, "docs.google.com")) {
+
+				// Simple extraction - you may want to use regex for better accuracy
+				if contains(document.DocumentDataUrl, "/file/d/") {
+					parts := splitString(document.DocumentDataUrl, "/file/d/")
+					if len(parts) > 1 {
+						idParts := splitString(parts[1], "/")
+						if len(idParts) > 0 {
+							extractedFileID = idParts[0]
+						}
+					}
+				} else if contains(document.DocumentDataUrl, "id=") {
+					parts := splitString(document.DocumentDataUrl, "id=")
+					if len(parts) > 1 {
+						idParts := splitString(parts[1], "&")
+						extractedFileID = idParts[0]
+					}
+				}
+			}
+
+			if extractedFileID != "" {
+				fmt.Printf("📧 Downloading from Google Drive URL: %s\n", extractedFileID)
+				pdfData, err = utils.DownloadFileFromDrive(extractedFileID)
+				if err == nil && len(pdfData) > 0 {
+					// Successfully downloaded from Google Drive
+					fmt.Printf("✅ Downloaded %d bytes from Google Drive\n", len(pdfData))
+				}
+			}
+		}
+
+		// If we still don't have data, return error
+		if len(pdfData) == 0 {
+			return c.Status(400).JSON(fiber.Map{
+				"status":  "error",
+				"message": "Please provide PDF file, Google Drive file ID (file_id), or ensure the document URL is accessible",
+				"data":    nil,
+			})
+		}
+	}
+
+	// Final check: ensure we have PDF data from some source
+	if len(pdfData) == 0 {
 		return c.Status(400).JSON(fiber.Map{
 			"status":  "error",
-			"message": "Please upload the PDF file directly",
-			"data":    nil,
-		})
-	} else {
-		return c.Status(400).JSON(fiber.Map{
-			"status":  "error",
-			"message": "Either PDF file or document UUID is required",
+			"message": "Either PDF file, document UUID, or Google Drive file ID (file_id) is required",
 			"data":    nil,
 		})
 	}
@@ -555,8 +685,14 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		input.DocumentType = "Document"
 	}
 
+	// Determine the document identifier for logging
+	docIdentifier := input.DocumentUUID
+	if docIdentifier == "" && googleDriveFileID != "" {
+		docIdentifier = googleDriveFileID
+	}
+
 	// Send email with PDF attachment
-	err = utils.SendDocumentEmail(input.Email, input.DocumentType, input.DocumentUUID, pdfData)
+	err = utils.SendDocumentEmail(input.Email, input.DocumentType, docIdentifier, pdfData)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
@@ -566,7 +702,7 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 	}
 
 	// Log email sent activity
-	utils.LogCreateWithDB(database.DB, c, "document_email", "Document sent to "+input.Email, input.DocumentUUID)
+	utils.LogCreateWithDB(database.DB, c, "document_email", "Document sent to "+input.Email, docIdentifier)
 
 	return c.JSON(fiber.Map{
 		"status":  "success",
@@ -575,6 +711,7 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 			"email":         input.Email,
 			"document_type": input.DocumentType,
 			"document_uuid": input.DocumentUUID,
+			"file_id":       googleDriveFileID,
 		},
 	})
 }
@@ -797,5 +934,115 @@ func GenerateStampedPDFMetadata(c *fiber.Ctx) error {
 		"status":  "success",
 		"message": "Stamped PDF metadata generated",
 		"data":    response,
+	})
+}
+
+// DownloadGoogleDriveFile - Proxy endpoint to download Google Drive files (bypasses CORS)
+func DownloadGoogleDriveFile(c *fiber.Ctx) error {
+	// Support multiple parameter names for compatibility
+	fileID := c.Query("file_id")
+	if fileID == "" {
+		fileID = c.Query("fileId") // Support camelCase
+	}
+	if fileID == "" {
+		fileID = c.Params("file_id")
+	}
+
+	if fileID == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Google Drive file ID is required (use ?fileId=YOUR_FILE_ID or ?file_id=YOUR_FILE_ID)",
+			"data":    nil,
+		})
+	}
+
+	fmt.Printf("📥 Downloading file from Google Drive: %s\n", fileID)
+
+	// Download file from Google Drive using backend (bypasses CORS)
+	fileData, err := utils.DownloadFileFromDrive(fileID)
+	if err != nil {
+		fmt.Printf("❌ Download failed for file %s: %v\n", fileID, err)
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Failed to download file from Google Drive",
+			"error":   err.Error(),
+		})
+	}
+
+	if len(fileData) == 0 {
+		fmt.Printf("⚠️ Downloaded 0 bytes for file %s\n", fileID)
+		return c.Status(500).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Downloaded file is empty (0 bytes). The file may be private or the link is incorrect.",
+			"data":    nil,
+		})
+	}
+
+	fmt.Printf("✅ Successfully downloaded %d bytes for file %s\n", len(fileData), fileID)
+
+	// Set CORS headers
+	c.Set("Access-Control-Allow-Origin", "*")
+	c.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	c.Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Detect content type from file data
+	contentType := "application/octet-stream"
+	if len(fileData) > 0 {
+		// Check for common file types
+		if len(fileData) >= 4 && string(fileData[0:4]) == "%PDF" {
+			contentType = "application/pdf"
+		} else if len(fileData) >= 2 && fileData[0] == 0xFF && fileData[1] == 0xD8 {
+			contentType = "image/jpeg"
+		} else if len(fileData) >= 8 && string(fileData[0:8]) == "\x89PNG\r\n\x1a\n" {
+			contentType = "image/png"
+		} else if len(fileData) >= 6 && string(fileData[0:6]) == "GIF87a" || string(fileData[0:6]) == "GIF89a" {
+			contentType = "image/gif"
+		}
+	}
+
+	// Set content type
+	c.Set("Content-Type", contentType)
+	c.Set("Content-Disposition", "inline; filename=\"document\"")
+	c.Set("Content-Length", fmt.Sprintf("%d", len(fileData)))
+
+	// Return the file data
+	return c.Send(fileData)
+}
+
+// GetGoogleDriveFileMetadata - Get metadata for a Google Drive file
+func GetGoogleDriveFileMetadata(c *fiber.Ctx) error {
+	fileID := c.Query("file_id")
+	if fileID == "" {
+		fileID = c.Params("file_id")
+	}
+
+	if fileID == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Google Drive file ID is required",
+			"data":    nil,
+		})
+	}
+
+	// Get file metadata from Google Drive
+	metadata, err := utils.GetFileMetadata(fileID)
+	if err != nil {
+		// If API call fails, return basic info
+		metadata = map[string]interface{}{
+			"file_id":      fileID,
+			"view_url":     utils.GetDriveViewURL(fileID),
+			"download_url": utils.GetPublicFileURL(fileID),
+			"proxy_url":    "/api/public/documents/gdrive/download/" + fileID,
+			"error":        err.Error(),
+		}
+	} else {
+		// Add proxy URL to metadata
+		metadata["proxy_url"] = "/api/public/documents/gdrive/download/" + fileID
+	}
+
+	return c.JSON(fiber.Map{
+		"status":  "success",
+		"message": "File metadata retrieved",
+		"data":    metadata,
 	})
 }
