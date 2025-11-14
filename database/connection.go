@@ -28,7 +28,6 @@ func Connect() {
 	}
 
 	DB = connection
-	fmt.Println("Database Connected 🎉!")
 
 	// Enable UUID extension for PostgreSQL
 	if err := connection.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"").Error; err != nil {

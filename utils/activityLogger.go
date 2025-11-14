@@ -30,7 +30,6 @@ func (al *ActivityLogger) LogUserActivity(c *fiber.Ctx, action, name, descriptio
 	userUUID, err := GetUserUUIDFromToken(c)
 	if err != nil {
 		// Don't fail the main operation if logging fails
-		fmt.Printf("Warning: Could not log activity - %v\n", err)
 		return nil
 	}
 
@@ -53,11 +52,9 @@ func (al *ActivityLogger) LogUserActivity(c *fiber.Ctx, action, name, descriptio
 
 	// Save to database
 	if err := al.DB.Create(logEntry).Error; err != nil {
-		fmt.Printf("Error saving activity log: %v\n", err)
 		return err
 	}
 
-	fmt.Printf("✅ Activity logged: %s - %s for user %s\n", action, name, userUUID)
 	return nil
 }
 

@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"log"
-
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -14,6 +12,5 @@ func HashPassword(password string) (string, error) {
 // CheckPasswordHash compare password with hash
 func CheckPasswordHash(hash, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	log.Println(hash, "haaaash")
 	return err == nil
 }

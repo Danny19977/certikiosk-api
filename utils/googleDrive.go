@@ -90,7 +90,7 @@ func DownloadFileFromDrive(fileID string) ([]byte, error) {
 	}
 
 	// Get file metadata first to check permissions
-	file, err := srv.Files.Get(fileID).Fields("id, name, mimeType, permissions").Do()
+	_, err = srv.Files.Get(fileID).Fields("id, name, mimeType, permissions").Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve file metadata: %v", err)
 	}
@@ -107,7 +107,6 @@ func DownloadFileFromDrive(fileID string) ([]byte, error) {
 		return nil, fmt.Errorf("unable to read file content: %v", err)
 	}
 
-	fmt.Printf("Downloaded file: %s (%s)\n", file.Name, file.MimeType)
 	return data, nil
 }
 
@@ -160,8 +159,6 @@ func GetDriveViewURL(fileID string) string {
 // DownloadPublicDriveFile - Simple HTTP-based download for public Google Drive files
 // This is a fallback method when OAuth2 is not configured
 func DownloadPublicDriveFile(fileID string) ([]byte, error) {
-	fmt.Printf("🔍 Attempting to download public file: %s\n", fileID)
-
 	// Try multiple download URLs
 	urls := []string{
 		fmt.Sprintf("https://drive.google.com/uc?export=download&id=%s", fileID),
@@ -171,15 +168,12 @@ func DownloadPublicDriveFile(fileID string) ([]byte, error) {
 	}
 
 	var lastErr error
-	for i, url := range urls {
-		fmt.Printf("📡 Attempt %d/%d: %s\n", i+1, len(urls), url)
+	for _, url := range urls {
 		data, err := tryDownloadURL(url)
 		if err == nil && len(data) > 0 {
-			fmt.Printf("✅ Success! Downloaded %d bytes\n", len(data))
 			return data, nil
 		}
 		if err != nil {
-			fmt.Printf("❌ Attempt %d failed: %v\n", i+1, err)
 			lastErr = err
 		}
 	}
@@ -273,7 +267,6 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 
 // saveToken saves a token to a file path
 func saveToken(path string, token *oauth2.Token) error {
-	fmt.Printf("Saving credential file to: %s\n", path)
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("unable to cache oauth token: %v", err)

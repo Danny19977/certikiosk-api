@@ -162,11 +162,6 @@ func encodeBase64(data []byte) string {
 
 // SendDocumentEmail sends a document via email with a formatted template
 func SendDocumentEmail(to, documentType, documentID string, pdfData []byte) error {
-	fmt.Printf("📧 SendDocumentEmail called with %d bytes\n", len(pdfData))
-	if len(pdfData) > 4 {
-		fmt.Printf("📧 PDF signature in SendDocumentEmail: %s\n", string(pdfData[:4]))
-	}
-
 	subject := fmt.Sprintf("Your %s Document from CertiKiosk", documentType)
 
 	body := fmt.Sprintf(`
@@ -205,28 +200,27 @@ func SendDocumentEmail(to, documentType, documentID string, pdfData []byte) erro
 
 	filename := fmt.Sprintf("%s_%s.pdf", documentType, documentID)
 
-	fmt.Printf("📧 Calling SendEmail with attachment: %s (%d bytes)\n", filename, len(pdfData))
 	return SendEmail(to, subject, body, pdfData, filename)
 }
 
 // SendDocumentEmailWithStamp sends a document via email with optional stamp image
 func SendDocumentEmailWithStamp(to, documentType, documentID string, fileData []byte, stampData []byte, fileExt, mimeType string) error {
-	fmt.Printf("📧 SendDocumentEmailWithStamp called with %d bytes, type: %s, stamp: %d bytes\n", len(fileData), fileExt, len(stampData))
-
-	// Convert images to PDF with stamp (either provided stamp or text stamp)
 	var finalData []byte
 	var finalExt string
 	var finalMimeType string
 
-	if fileExt == "png" || fileExt == "jpg" || fileExt == "jpeg" {
+	// If it's already a PDF, send it as-is (frontend already stamped it)
+	if fileExt == "pdf" {
+		finalData = fileData
+		finalExt = fileExt
+		finalMimeType = mimeType
+	} else if fileExt == "png" || fileExt == "jpg" || fileExt == "jpeg" {
+		// Only convert images to PDF
 		if len(stampData) > 0 {
-			fmt.Printf("🔄 Converting %s image to PDF with provided stamp image...\n", fileExt)
 			pdfData, err := ConvertImageToPDFWithImageStamp(fileData, stampData, fileExt, documentType)
 			if err != nil {
-				fmt.Printf("⚠️ Failed to convert with image stamp: %v, trying text stamp\n", err)
 				pdfData, err = ConvertImageToPDFWithStamp(fileData, fileExt, documentType)
 				if err != nil {
-					fmt.Printf("⚠️ Failed to convert: %v, sending as %s\n", err, fileExt)
 					finalData = fileData
 					finalExt = fileExt
 					finalMimeType = mimeType
@@ -236,27 +230,24 @@ func SendDocumentEmailWithStamp(to, documentType, documentID string, fileData []
 					finalMimeType = "application/pdf"
 				}
 			} else {
-				fmt.Printf("✅ Successfully converted %s to PDF with stamp: %d bytes\n", fileExt, len(pdfData))
 				finalData = pdfData
 				finalExt = "pdf"
 				finalMimeType = "application/pdf"
 			}
 		} else {
-			fmt.Printf("🔄 Converting %s image to PDF with text stamp...\n", fileExt)
 			pdfData, err := ConvertImageToPDFWithStamp(fileData, fileExt, documentType)
 			if err != nil {
-				fmt.Printf("⚠️ Failed to convert: %v, sending as %s\n", err, fileExt)
 				finalData = fileData
 				finalExt = fileExt
 				finalMimeType = mimeType
 			} else {
-				fmt.Printf("✅ Successfully converted %s to PDF: %d bytes\n", fileExt, len(pdfData))
 				finalData = pdfData
 				finalExt = "pdf"
 				finalMimeType = "application/pdf"
 			}
 		}
 	} else {
+		// Other file types, send as-is
 		finalData = fileData
 		finalExt = fileExt
 		finalMimeType = mimeType
@@ -310,29 +301,23 @@ func SendDocumentEmailWithStamp(to, documentType, documentID string, fileData []
 
 	filename := fmt.Sprintf("%s_%s.%s", documentType, documentID, finalExt)
 
-	fmt.Printf("📧 Calling SendEmailWithMime with attachment: %s (%d bytes, %s)\n", filename, len(finalData), finalMimeType)
 	return SendEmailWithMime(to, subject, body, finalData, filename, finalMimeType)
 }
 
 // SendDocumentEmailWithType sends a document via email with auto-detected file type
 func SendDocumentEmailWithType(to, documentType, documentID string, fileData []byte, fileExt, mimeType string) error {
-	fmt.Printf("📧 SendDocumentEmailWithType called with %d bytes, type: %s\n", len(fileData), fileExt)
-
 	// Convert images to PDF with certification stamp
 	var finalData []byte
 	var finalExt string
 	var finalMimeType string
 
 	if fileExt == "png" || fileExt == "jpg" || fileExt == "jpeg" {
-		fmt.Printf("🔄 Converting %s image to PDF with certification stamp...\n", fileExt)
 		pdfData, err := ConvertImageToPDFWithStamp(fileData, fileExt, documentType)
 		if err != nil {
-			fmt.Printf("⚠️ Failed to convert image to PDF: %v, sending as %s\n", err, fileExt)
 			finalData = fileData
 			finalExt = fileExt
 			finalMimeType = mimeType
 		} else {
-			fmt.Printf("✅ Successfully converted %s to certified PDF: %d bytes\n", fileExt, len(pdfData))
 			finalData = pdfData
 			finalExt = "pdf"
 			finalMimeType = "application/pdf"
@@ -391,7 +376,6 @@ func SendDocumentEmailWithType(to, documentType, documentID string, fileData []b
 
 	filename := fmt.Sprintf("%s_%s.%s", documentType, documentID, finalExt)
 
-	fmt.Printf("📧 Calling SendEmailWithMime with attachment: %s (%d bytes, %s)\n", filename, len(finalData), finalMimeType)
 	return SendEmailWithMime(to, subject, body, finalData, filename, finalMimeType)
 }
 

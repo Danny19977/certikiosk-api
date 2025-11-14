@@ -485,11 +485,6 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 
 	var input EmailInput
 
-	// Log the raw request body for debugging
-	fmt.Printf("📨 Email request received\n")
-	fmt.Printf("📨 Content-Type: %s\n", c.Get("Content-Type"))
-	fmt.Printf("📨 Request body: %s\n", string(c.Body()))
-
 	// Parse JSON or form data
 	if err := c.BodyParser(&input); err != nil {
 		// Try parsing as multipart form
@@ -521,12 +516,6 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		}
 	}
 
-	fmt.Printf("📨 Parsed email: %s\n", input.Email)
-	fmt.Printf("📨 Parsed file_id: %s\n", input.FileID)
-	fmt.Printf("📨 Parsed fileId: %s\n", input.FileId)
-	fmt.Printf("📨 Parsed google_drive_file_id: %s\n", input.GoogleDriveFileID)
-	fmt.Printf("📨 Parsed document_uuid: %s\n", input.DocumentUUID)
-
 	// Validate email
 	if input.Email == "" {
 		return c.Status(400).JSON(fiber.Map{
@@ -545,21 +534,19 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		googleDriveFileID = input.FileId
 	}
 
-	fmt.Printf("📨 Final Google Drive file ID: %s\n", googleDriveFileID)
-
-	// Get PDF/image file from form - try both "pdf" and "pdfFile" field names
-	file, err := c.FormFile("pdf")
+	// Get the uploaded stamped PDF from frontend - try multiple field names
+	// Frontend sends the STAMPED PDF in "document" field
+	file, err := c.FormFile("document")
 	if err != nil {
-		// Try alternative field name "pdfFile"
-		file, err = c.FormFile("pdfFile")
-		if err == nil {
-			fmt.Printf("📨 Found PDF file in 'pdfFile' field\n")
+		// Try alternative field names
+		file, err = c.FormFile("pdf")
+		if err != nil {
+			file, err = c.FormFile("pdfFile")
 		}
-	} else {
-		fmt.Printf("📨 Found PDF file in 'pdf' field\n")
 	}
 
-	// Try to get stamp image from form
+	// Note: We DON'T need stamp image anymore because frontend already stamped the PDF
+	// Keeping this code for backward compatibility if needed
 	stampFile, stampErr := c.FormFile("stamp")
 	if stampErr != nil {
 		stampFile, stampErr = c.FormFile("stampImage")
@@ -567,27 +554,23 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 
 	var stampData []byte
 	if stampErr == nil && stampFile != nil {
-		fmt.Printf("📨 Found stamp image: %s, size: %d bytes\n", stampFile.Filename, stampFile.Size)
 		stampHandle, err := stampFile.Open()
 		if err == nil {
 			defer stampHandle.Close()
 			stampData, _ = io.ReadAll(stampHandle)
-			fmt.Printf("✅ Successfully read stamp image: %d bytes\n", len(stampData))
 		}
-	} else {
-		fmt.Printf("ℹ️ No stamp image provided, will use text stamp\n")
 	}
 
 	var pdfData []byte
 
+	// PRIORITY 1: Use the uploaded stamped PDF from frontend
 	if err == nil && file != nil {
-		fmt.Printf("📨 Processing uploaded file: %s, size: %d bytes\n", file.Filename, file.Size)
-		// Read uploaded file
+		// Read the uploaded stamped PDF
 		fileHandle, err := file.Open()
 		if err != nil {
 			return c.Status(400).JSON(fiber.Map{
 				"status":  "error",
-				"message": "Failed to read file",
+				"message": "Failed to read uploaded file",
 				"error":   err.Error(),
 			})
 		}
@@ -601,18 +584,9 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 				"error":   err.Error(),
 			})
 		}
-		fmt.Printf("📨 Successfully read file: %d bytes\n", len(pdfData))
-
-		// Verify file signature
-		if len(pdfData) > 4 {
-			fmt.Printf("📨 File header: %s\n", string(pdfData[:4]))
-			if string(pdfData[:4]) != "%PDF" {
-				fmt.Printf("ℹ️ File is not PDF, will be converted\n")
-			}
-		}
 	} else if googleDriveFileID != "" {
-		// Download from Google Drive
-		fmt.Printf("📧 Downloading Google Drive file for email: %s\n", googleDriveFileID)
+		// FALLBACK: Only download from Google Drive if NO file was uploaded
+
 		pdfData, err = utils.DownloadFileFromDrive(googleDriveFileID)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{
@@ -679,12 +653,7 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 			}
 
 			if extractedFileID != "" {
-				fmt.Printf("📧 Downloading from Google Drive URL: %s\n", extractedFileID)
 				pdfData, err = utils.DownloadFileFromDrive(extractedFileID)
-				if err == nil && len(pdfData) > 0 {
-					// Successfully downloaded from Google Drive
-					fmt.Printf("✅ Downloaded %d bytes from Google Drive\n", len(pdfData))
-				}
 			}
 		}
 
@@ -718,32 +687,24 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		docIdentifier = googleDriveFileID
 	}
 
-	// Final verification before sending
-	fmt.Printf("📧 Preparing to send email with file: %d bytes\n", len(pdfData))
-
 	// Detect file type from signature
 	var fileExt string
 	var mimeType string
 	if len(pdfData) >= 4 {
 		signature := string(pdfData[:4])
-		fmt.Printf("📧 File signature: %v (hex: %x)\n", []byte(signature), pdfData[:4])
 
 		if signature == "%PDF" {
 			fileExt = "pdf"
 			mimeType = "application/pdf"
-			fmt.Printf("✅ Detected PDF file\n")
 		} else if pdfData[0] == 0x89 && pdfData[1] == 0x50 && pdfData[2] == 0x4E && pdfData[3] == 0x47 {
 			fileExt = "png"
 			mimeType = "image/png"
-			fmt.Printf("✅ Detected PNG image\n")
 		} else if pdfData[0] == 0xFF && pdfData[1] == 0xD8 && pdfData[2] == 0xFF {
 			fileExt = "jpg"
 			mimeType = "image/jpeg"
-			fmt.Printf("✅ Detected JPEG image\n")
 		} else {
-			fileExt = "pdf" // Default fallback
+			fileExt = "pdf"
 			mimeType = "application/pdf"
-			fmt.Printf("⚠️ Unknown file type, defaulting to PDF\n")
 		}
 	} else {
 		fileExt = "pdf"
@@ -1015,12 +976,9 @@ func DownloadGoogleDriveFile(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Printf("📥 Downloading file from Google Drive: %s\n", fileID)
-
 	// Download file from Google Drive using backend (bypasses CORS)
 	fileData, err := utils.DownloadFileFromDrive(fileID)
 	if err != nil {
-		fmt.Printf("❌ Download failed for file %s: %v\n", fileID, err)
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Failed to download file from Google Drive",
@@ -1029,15 +987,12 @@ func DownloadGoogleDriveFile(c *fiber.Ctx) error {
 	}
 
 	if len(fileData) == 0 {
-		fmt.Printf("⚠️ Downloaded 0 bytes for file %s\n", fileID)
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
 			"message": "Downloaded file is empty (0 bytes). The file may be private or the link is incorrect.",
 			"data":    nil,
 		})
 	}
-
-	fmt.Printf("✅ Successfully downloaded %d bytes for file %s\n", len(fileData), fileID)
 
 	// Set CORS headers
 	c.Set("Access-Control-Allow-Origin", "*")

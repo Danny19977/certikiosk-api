@@ -329,6 +329,5 @@ func ConvertImageToPDFWithImageStamp(imageData []byte, stampData []byte, imageTy
 		return nil, fmt.Errorf("failed to generate PDF: %v", err)
 	}
 
-	fmt.Printf("✅ Combined document image (%s) with stamp image (%s) into PDF\n", imageType, stampType)
 	return buf.Bytes(), nil
 }
