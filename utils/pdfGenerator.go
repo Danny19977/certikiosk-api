@@ -1,8 +1,13 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
+
+	"github.com/jung-kurt/gofpdf"
 )
 
 // PDFStampConfig holds configuration for PDF stamp/watermark
@@ -153,4 +158,177 @@ func PreparePrintableDocument(documentURL string, certificationInfo Certificatio
 
 	// For now, return a placeholder response
 	return documentURL + "_printable", nil
+}
+
+// ConvertImageToPDFWithStamp converts an image (PNG/JPEG) to PDF and adds a certification stamp
+func ConvertImageToPDFWithStamp(imageData []byte, imageType, documentType string) ([]byte, error) {
+	// Create temporary file for the image
+	tmpDir := os.TempDir()
+	tmpImagePath := filepath.Join(tmpDir, fmt.Sprintf("temp_image_%d.%s", time.Now().UnixNano(), imageType))
+
+	// Write image to temp file
+	if err := os.WriteFile(tmpImagePath, imageData, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write temp image: %v", err)
+	}
+	defer os.Remove(tmpImagePath)
+
+	// Create PDF with A4 dimensions
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetAutoPageBreak(false, 0) // Disable auto page breaks
+	pdf.AddPage()
+
+	// Get page dimensions
+	pageWidth, pageHeight := pdf.GetPageSize()
+
+	// Define margins
+	margin := 10.0
+	stampHeight := 25.0
+
+	// Calculate image area (leave space for stamp at bottom)
+	imageX := margin
+	imageY := margin
+	imageWidth := pageWidth - (2 * margin)
+	imageHeight := pageHeight - (2 * margin) - stampHeight - 5 // 5mm gap between image and stamp
+
+	// Add the image with proper options
+	imageOpt := gofpdf.ImageOptions{
+		ImageType: imageType,
+		ReadDpi:   false,
+	}
+
+	// Register and place the image to fit in the available space
+	pdf.ImageOptions(tmpImagePath, imageX, imageY, imageWidth, imageHeight, false, imageOpt, 0, "")
+
+	// Position for the stamp (at the bottom)
+	stampY := pageHeight - margin - stampHeight
+	stampX := margin
+	stampWidth := pageWidth - (2 * margin)
+
+	// Draw stamp background (light green)
+	pdf.SetFillColor(240, 255, 240) // Very light green
+	pdf.Rect(stampX, stampY, stampWidth, stampHeight, "F")
+
+	// Draw stamp border (dark green)
+	pdf.SetDrawColor(0, 128, 0) // Green
+	pdf.SetLineWidth(1.0)
+	pdf.Rect(stampX, stampY, stampWidth, stampHeight, "D")
+
+	// Add "CERTIFIED" header
+	pdf.SetFont("Arial", "B", 14)
+	pdf.SetTextColor(0, 128, 0) // Green
+	pdf.SetXY(stampX+3, stampY+3)
+	pdf.Cell(stampWidth-6, 6, "CERTIFIED DOCUMENT")
+
+	// Add horizontal line under header
+	pdf.SetDrawColor(0, 128, 0)
+	pdf.SetLineWidth(0.3)
+	pdf.Line(stampX+3, stampY+10, stampX+stampWidth-3, stampY+10)
+
+	// Add certification details in two columns
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(50, 50, 50) // Dark gray
+
+	// Left column
+	pdf.SetXY(stampX+3, stampY+12)
+	pdf.Cell(stampWidth/2-3, 4, fmt.Sprintf("Document Type: %s", documentType))
+
+	// Right column
+	certDate := time.Now().Format("Jan 02, 2006 15:04")
+	pdf.SetXY(stampX+stampWidth/2, stampY+12)
+	pdf.Cell(stampWidth/2-3, 4, fmt.Sprintf("Certified: %s", certDate))
+
+	// Add verification message
+	pdf.SetFont("Arial", "I", 8)
+	pdf.SetTextColor(80, 80, 80)
+	pdf.SetXY(stampX+3, stampY+17)
+	pdf.MultiCell(stampWidth-6, 3, "This document has been verified and certified as authentic by the CertiKiosk System", "", "C", false)
+
+	// Generate PDF to bytes
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return nil, fmt.Errorf("failed to generate PDF: %v", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// ConvertImageToPDFWithImageStamp converts an image to PDF and overlays a stamp image at the bottom
+func ConvertImageToPDFWithImageStamp(imageData []byte, stampData []byte, imageType, documentType string) ([]byte, error) {
+	// Create temporary files for both images
+	tmpDir := os.TempDir()
+	tmpImagePath := filepath.Join(tmpDir, fmt.Sprintf("temp_image_%d.%s", time.Now().UnixNano(), imageType))
+
+	// Detect stamp image type
+	var stampType string
+	if len(stampData) >= 4 {
+		if stampData[0] == 0x89 && stampData[1] == 0x50 && stampData[2] == 0x4E && stampData[3] == 0x47 {
+			stampType = "png"
+		} else if stampData[0] == 0xFF && stampData[1] == 0xD8 && stampData[2] == 0xFF {
+			stampType = "jpg"
+		} else {
+			return nil, fmt.Errorf("unsupported stamp image format")
+		}
+	} else {
+		return nil, fmt.Errorf("stamp data too small")
+	}
+
+	tmpStampPath := filepath.Join(tmpDir, fmt.Sprintf("temp_stamp_%d.%s", time.Now().UnixNano(), stampType))
+
+	// Write both images to temp files
+	if err := os.WriteFile(tmpImagePath, imageData, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write temp image: %v", err)
+	}
+	defer os.Remove(tmpImagePath)
+
+	if err := os.WriteFile(tmpStampPath, stampData, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write temp stamp: %v", err)
+	}
+	defer os.Remove(tmpStampPath)
+
+	// Create PDF with A4 dimensions
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetAutoPageBreak(false, 0) // Disable auto page breaks
+	pdf.AddPage()
+
+	// Get page dimensions
+	pageWidth, pageHeight := pdf.GetPageSize()
+
+	// Define margins and stamp area
+	margin := 10.0
+	stampHeight := 35.0 // Height reserved for stamp at bottom
+	stampMargin := 5.0  // Small margin around stamp
+
+	// Calculate image area (document image at top)
+	imageX := margin
+	imageY := margin
+	imageWidth := pageWidth - (2 * margin)
+	imageHeight := pageHeight - (2 * margin) - stampHeight - stampMargin
+
+	// Add the main document image
+	imageOpt := gofpdf.ImageOptions{
+		ImageType: imageType,
+		ReadDpi:   false,
+	}
+	pdf.ImageOptions(tmpImagePath, imageX, imageY, imageWidth, imageHeight, false, imageOpt, 0, "")
+
+	// Position for the stamp image (at the bottom)
+	stampY := pageHeight - margin - stampHeight
+	stampX := margin
+	stampWidth := pageWidth - (2 * margin)
+
+	// Add the stamp image
+	stampOpt := gofpdf.ImageOptions{
+		ImageType: stampType,
+		ReadDpi:   false,
+	}
+	pdf.ImageOptions(tmpStampPath, stampX, stampY, stampWidth, stampHeight, false, stampOpt, 0, "")
+
+	// Generate PDF to bytes
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return nil, fmt.Errorf("failed to generate PDF: %v", err)
+	}
+
+	fmt.Printf("✅ Combined document image (%s) with stamp image (%s) into PDF\n", imageType, stampType)
+	return buf.Bytes(), nil
 }

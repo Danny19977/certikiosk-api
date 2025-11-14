@@ -480,7 +480,7 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		DocumentType      string `json:"document_type"`
 		FileID            string `json:"file_id"`              // Google Drive file ID
 		GoogleDriveFileID string `json:"google_drive_file_id"` // Alternative parameter name
-		FileId            string `json:"fileId"`                // CamelCase variant
+		FileId            string `json:"fileId"`               // CamelCase variant
 	}
 
 	var input EmailInput
@@ -547,7 +547,7 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 
 	fmt.Printf("📨 Final Google Drive file ID: %s\n", googleDriveFileID)
 
-	// Get PDF file from form - try both "pdf" and "pdfFile" field names
+	// Get PDF/image file from form - try both "pdf" and "pdfFile" field names
 	file, err := c.FormFile("pdf")
 	if err != nil {
 		// Try alternative field name "pdfFile"
@@ -559,16 +559,35 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		fmt.Printf("📨 Found PDF file in 'pdf' field\n")
 	}
 
+	// Try to get stamp image from form
+	stampFile, stampErr := c.FormFile("stamp")
+	if stampErr != nil {
+		stampFile, stampErr = c.FormFile("stampImage")
+	}
+
+	var stampData []byte
+	if stampErr == nil && stampFile != nil {
+		fmt.Printf("📨 Found stamp image: %s, size: %d bytes\n", stampFile.Filename, stampFile.Size)
+		stampHandle, err := stampFile.Open()
+		if err == nil {
+			defer stampHandle.Close()
+			stampData, _ = io.ReadAll(stampHandle)
+			fmt.Printf("✅ Successfully read stamp image: %d bytes\n", len(stampData))
+		}
+	} else {
+		fmt.Printf("ℹ️ No stamp image provided, will use text stamp\n")
+	}
+
 	var pdfData []byte
 
 	if err == nil && file != nil {
-		fmt.Printf("📨 Processing uploaded PDF file: %s, size: %d bytes\n", file.Filename, file.Size)
-		// Read uploaded PDF file
+		fmt.Printf("📨 Processing uploaded file: %s, size: %d bytes\n", file.Filename, file.Size)
+		// Read uploaded file
 		fileHandle, err := file.Open()
 		if err != nil {
 			return c.Status(400).JSON(fiber.Map{
 				"status":  "error",
-				"message": "Failed to read PDF file",
+				"message": "Failed to read file",
 				"error":   err.Error(),
 			})
 		}
@@ -578,11 +597,19 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		if err != nil {
 			return c.Status(400).JSON(fiber.Map{
 				"status":  "error",
-				"message": "Failed to read PDF content",
+				"message": "Failed to read file content",
 				"error":   err.Error(),
 			})
 		}
-		fmt.Printf("📨 Successfully read PDF file: %d bytes\n", len(pdfData))
+		fmt.Printf("📨 Successfully read file: %d bytes\n", len(pdfData))
+
+		// Verify file signature
+		if len(pdfData) > 4 {
+			fmt.Printf("📨 File header: %s\n", string(pdfData[:4]))
+			if string(pdfData[:4]) != "%PDF" {
+				fmt.Printf("ℹ️ File is not PDF, will be converted\n")
+			}
+		}
 	} else if googleDriveFileID != "" {
 		// Download from Google Drive
 		fmt.Printf("📧 Downloading Google Drive file for email: %s\n", googleDriveFileID)
@@ -691,8 +718,40 @@ func SendDocumentEmail(c *fiber.Ctx) error {
 		docIdentifier = googleDriveFileID
 	}
 
-	// Send email with PDF attachment
-	err = utils.SendDocumentEmail(input.Email, input.DocumentType, docIdentifier, pdfData)
+	// Final verification before sending
+	fmt.Printf("📧 Preparing to send email with file: %d bytes\n", len(pdfData))
+
+	// Detect file type from signature
+	var fileExt string
+	var mimeType string
+	if len(pdfData) >= 4 {
+		signature := string(pdfData[:4])
+		fmt.Printf("📧 File signature: %v (hex: %x)\n", []byte(signature), pdfData[:4])
+
+		if signature == "%PDF" {
+			fileExt = "pdf"
+			mimeType = "application/pdf"
+			fmt.Printf("✅ Detected PDF file\n")
+		} else if pdfData[0] == 0x89 && pdfData[1] == 0x50 && pdfData[2] == 0x4E && pdfData[3] == 0x47 {
+			fileExt = "png"
+			mimeType = "image/png"
+			fmt.Printf("✅ Detected PNG image\n")
+		} else if pdfData[0] == 0xFF && pdfData[1] == 0xD8 && pdfData[2] == 0xFF {
+			fileExt = "jpg"
+			mimeType = "image/jpeg"
+			fmt.Printf("✅ Detected JPEG image\n")
+		} else {
+			fileExt = "pdf" // Default fallback
+			mimeType = "application/pdf"
+			fmt.Printf("⚠️ Unknown file type, defaulting to PDF\n")
+		}
+	} else {
+		fileExt = "pdf"
+		mimeType = "application/pdf"
+	}
+
+	// Send email with file attachment (and stamp if provided)
+	err = utils.SendDocumentEmailWithStamp(input.Email, input.DocumentType, docIdentifier, pdfData, stampData, fileExt, mimeType)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"status":  "error",
