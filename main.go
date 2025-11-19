@@ -34,7 +34,7 @@ func main() {
 
 	// Middleware
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000,http://192.168.0.70:3000",
+		AllowOrigins:     "http://localhost:3000,http://192.168.0.70:3000,https://certikiosk.io",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 		AllowMethods: strings.Join([]string{
