@@ -37,7 +37,7 @@ func main() {
 	// Allow origins can be configured via the ALLOWED_ORIGINS env var (comma-separated).
 	allowedOrigins := utils.Env("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
-		allowedOrigins = "http://localhost:3000,http://192.168.0.70:3000,https://certikiosk-production.up.railway.app:3000,https://certikiosk-production.up.railway.app"
+		allowedOrigins = "http://localhost:3000,http://192.168.0.70:3000,https://certikiosk-production.up.railway.app"
 	}
 	log.Printf("[info] CORS allowed origins: %s", allowedOrigins)
 
