@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/Danny19977/certikiosk.git/database"
 	"github.com/Danny19977/certikiosk.git/routes"
@@ -27,11 +28,7 @@ func main() {
 
 	database.Connect()
 
-	app := fiber.New(fiber.Config{
-		// Trust proxy headers
-		EnableTrustedProxyCheck: true,
-		TrustedProxies:          []string{"0.0.0.0/0"},
-	})
+	app := fiber.New()
 
 	// Initialize default config
 	app.Use(logger.New())
@@ -44,14 +41,31 @@ func main() {
 	}
 	log.Printf("[info] CORS allowed origins: %s", allowedOrigins)
 
-	// CORS Configuration - Must be before routes
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
-		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS,HEAD",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization,X-Requested-With",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With",
 		AllowCredentials: true,
-		ExposeHeaders:    "Content-Length,Content-Type",
-		MaxAge:           86400,
+		AllowMethods: strings.Join([]string{
+			fiber.MethodGet,
+			fiber.MethodPost,
+			fiber.MethodHead,
+			fiber.MethodPut,
+			fiber.MethodDelete,
+			fiber.MethodPatch,
+			fiber.MethodOptions,
+		}, ","),
+		ExposeHeaders:    "Content-Length, Content-Type",
+		MaxAge:           86400, // 24 hours in seconds
+		AllowOriginsFunc: func(origin string) bool {
+			// Fallback: Allow any origin that matches our allowed origins
+			origins := strings.Split(allowedOrigins, ",")
+			for _, o := range origins {
+				if strings.TrimSpace(o) == origin {
+					return true
+				}
+			}
+			return false
+		},
 	}))
 
 	// Health check endpoint (doesn't require DB)
