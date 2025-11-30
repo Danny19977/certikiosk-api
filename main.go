@@ -43,10 +43,8 @@ func main() {
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With",
 		AllowCredentials: true,
-		ExposeHeaders:    "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers",
-		MaxAge:           300,
 		AllowMethods: strings.Join([]string{
 			fiber.MethodGet,
 			fiber.MethodPost,
@@ -56,6 +54,8 @@ func main() {
 			fiber.MethodPatch,
 			fiber.MethodOptions,
 		}, ","),
+		ExposeHeaders: "Content-Length, Content-Type",
+		MaxAge:        86400, // 24 hours in seconds
 	}))
 
 	// Health check endpoint (doesn't require DB)
