@@ -54,8 +54,18 @@ func main() {
 			fiber.MethodPatch,
 			fiber.MethodOptions,
 		}, ","),
-		ExposeHeaders: "Content-Length, Content-Type",
-		MaxAge:        86400, // 24 hours in seconds
+		ExposeHeaders:    "Content-Length, Content-Type",
+		MaxAge:           86400, // 24 hours in seconds
+		AllowOriginsFunc: func(origin string) bool {
+			// Fallback: Allow any origin that matches our allowed origins
+			origins := strings.Split(allowedOrigins, ",")
+			for _, o := range origins {
+				if strings.TrimSpace(o) == origin {
+					return true
+				}
+			}
+			return false
+		},
 	}))
 
 	// Health check endpoint (doesn't require DB)
