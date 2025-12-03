@@ -186,7 +186,7 @@ func CreateDocument(c *fiber.Ctx) error {
 		NationalID      int64  `json:"national_id"`
 		UserUUID        string `json:"user_uuid"`
 		DocumentType    string `json:"document_type"`
-		DocumentDataUrl string `json:"document_data_url"`
+		DocumentDataUrl string `json:"document_data"`
 		IssueDate       string `json:"issue_date"`
 		IsActive        bool   `json:"is_active"`
 	}
@@ -349,7 +349,7 @@ func UpdateDocument(c *fiber.Ctx) error {
 		NationalID      int64  `json:"national_id"`
 		UserUUID        string `json:"user_uuid"`
 		DocumentType    string `json:"document_type"`
-		DocumentDataUrl string `json:"document_data_url"`
+		DocumentDataUrl string `json:"document_data"`
 		IsActive        *bool  `json:"is_active"`
 	}
 
