@@ -7,7 +7,7 @@ type Documents struct {
 
 	NationalID      int64     `json:"national_id"`
 	DocumentType    string    `json:"document_type"`
-	DocumentDataUrl string    `json:"document_data_url"`
+	DocumentDataUrl string    `json:"document_data" gorm:"column:document_data_url"`
 	UserUUID        string    `json:"user_uuid"`
 	IssueDate       time.Time `json:"issue_date"`
 	IsActive        bool      `json:"is_active"`
