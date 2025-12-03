@@ -54,8 +54,8 @@ func main() {
 			fiber.MethodPatch,
 			fiber.MethodOptions,
 		}, ","),
-		ExposeHeaders:    "Content-Length, Content-Type",
-		MaxAge:           86400, // 24 hours in seconds
+		ExposeHeaders: "Content-Length, Content-Type",
+		MaxAge:        86400, // 24 hours in seconds
 		AllowOriginsFunc: func(origin string) bool {
 			// Fallback: Allow any origin that matches our allowed origins
 			origins := strings.Split(allowedOrigins, ",")
