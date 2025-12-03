@@ -5,7 +5,7 @@ import "time"
 type Documents struct {
 	UUID string `gorm:"primaryKey;not null;unique" json:"uuid"`
 
-	NationalID      int       `json:"national_id"`
+	NationalID      int64     `json:"national_id"`
 	DocumentType    string    `json:"document_type"`
 	DocumentDataUrl string    `json:"document_data" gorm:"column:document_data_url"`
 	UserUUID        string    `json:"user_uuid"`

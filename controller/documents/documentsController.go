@@ -183,7 +183,7 @@ func GetActiveDocuments(c *fiber.Ctx) error {
 // CreateDocument - Upload/Register a new document
 func CreateDocument(c *fiber.Ctx) error {
 	type DocumentInput struct {
-		NationalID      int    `json:"national_id"`
+		NationalID      int64  `json:"national_id"`
 		UserUUID        string `json:"user_uuid"`
 		DocumentType    string `json:"document_type"`
 		DocumentDataUrl string `json:"document_data_url"`
@@ -260,7 +260,7 @@ func CreateDocument(c *fiber.Ctx) error {
 // FetchDocumentFromExternalSource - Retrieve document from Google Drive or AWS
 func FetchDocumentFromExternalSource(c *fiber.Ctx) error {
 	type FetchDocumentInput struct {
-		NationalID   int    `json:"national_id"`
+		NationalID   int64  `json:"national_id"`
 		UserUUID     string `json:"user_uuid"`
 		Source       string `json:"source"`        // "google_drive" or "aws_s3"
 		DocumentID   string `json:"document_id"`   // ID/Key in external source
@@ -346,7 +346,7 @@ func UpdateDocument(c *fiber.Ctx) error {
 	db := database.DB
 
 	type UpdateDocumentInput struct {
-		NationalID      int    `json:"national_id"`
+		NationalID      int64  `json:"national_id"`
 		UserUUID        string `json:"user_uuid"`
 		DocumentType    string `json:"document_type"`
 		DocumentDataUrl string `json:"document_data_url"`
